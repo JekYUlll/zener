@@ -3,12 +3,8 @@ project(zener_web_server)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 add_definitions("-O0 -g -ggdb -Wno-unused-variable")
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-set(SOURCE_FILES
-    src/main.cpp
-)
 
 include_directories(
     ${PROJECT_SOURCE_DIR}/include
@@ -25,4 +21,5 @@ add_subdirectory(tests)
 aux_source_directory(src ALL_SOURCES)
 add_executable(MyExecutable
     ${ALL_SOURCES}
+        src/log/log.cpp
 )

@@ -2,8 +2,10 @@
 #define DATABASE_H
 
 #include <string>
+#include <mysql/mysql.h>
 
-namespace zws {
+namespace zws 
+{
 
     class Database
     {
@@ -13,6 +15,7 @@ namespace zws {
 
     private:
         virtual void init() = 0;
+        unsigned int _port;
 
     };
 
