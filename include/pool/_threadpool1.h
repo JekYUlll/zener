@@ -6,8 +6,8 @@
 
 // https://github.com/markparticle/WebServer
 
-#ifndef THREADPOOL_H
-#define THREADPOOL_H
+#ifndef THREADPOOL1_H
+#define THREADPOOL1_H
 
 #include <cassert>
 #include <condition_variable>
@@ -72,4 +72,4 @@ class ThreadPool {
     std::shared_ptr<Pool> pool_;
 };
 
-#endif // THREADPOOL_H
+#endif // THREADPOOL1_H

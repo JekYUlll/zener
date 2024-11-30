@@ -2,6 +2,8 @@
 #define LOG_H
 
 #include "spdlog/common.h"
+#include <atomic>
+#include <mutex>
 
 namespace zws {
 
@@ -12,7 +14,7 @@ namespace zws {
         Logger &operator=(const Logger&) = delete;
 
         static void Init();
-        static void WriteToFile(std::string_view sFileName);
+        static bool WriteToFile(std::string_view sFileName);
 
         static Logger* GetLoggerInstance() {
             return &sLoggerInstance;
@@ -42,8 +44,9 @@ namespace zws {
         Logger();
 
         static Logger sLoggerInstance;
-        static bool _bWriteToFile;
+        static std::atomic<bool> _bWriteToFile;
         static std::string _sLogFileName;
+        static std::mutex _fileNameMutex;
 
         void log(spdlog::source_loc loc, spdlog::level::level_enum lvl, const spdlog::memory_buf_t *buffer);
 

@@ -18,13 +18,13 @@ public:
     SafeQueue(SafeQueue &&other);
     ~SafeQueue();
 
-    bool empty()
+    [[nodiscard]] bool empty()
     {
         std::unique_lock<std::mutex> lock(_mutex);
         return _queue.empty();
     }
 
-    int size()
+    [[nodiscard]] int size()
     {
         std::unique_lock<std::mutex> lock(_mutex);
 

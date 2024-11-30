@@ -14,4 +14,20 @@ namespace zws {
 
     }
 
+    void Server::Start() {
+        Logger::Init();
+        Logger::WriteToFile("logs/server.log");  // 建议使用固定的日志目录
+
+        LOG_I(R"(
+ _______ _ __   ___ _ __ 
+|_  / _ \ '_ \ / _ \ '__|
+ / /  __/ | | |  __/ |   
+/___\___|_| |_|\___|_|   
+)");
+        
+        LOG_I("Zener Web Server is starting...");
+        LOG_I("Port: {}", _port);
+        
+    }
+
 }

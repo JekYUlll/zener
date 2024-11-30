@@ -2,7 +2,8 @@
 #include "log/log.h"
 #include <sys/stat.h>
 #include <iostream>
-
+#include <thread>
+#include <filesystem>
 int main(int argc, char *argv[]) {
 
     // WebServer server(
@@ -18,9 +19,15 @@ int main(int argc, char *argv[]) {
         std::cerr << "Failed to create log directory" << std::endl;
         return 1;
     }
+
+    std::cout << "hardware_concurrency: " << static_cast<size_t>(std::thread::hardware_concurrency()) << std::endl;
     
     zws::Logger::Init();
-    zws::Logger::WriteToFile("logs/test.log");
+    // zws::Logger::Init();
+    if(!zws::Logger::WriteToFile("logs/test.log")) {
+        std::cerr << "Failed to create log file" << std::endl;
+        return 1;
+    }
     LOG_T("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
     LOG_D("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
     LOG_I("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
@@ -32,6 +39,8 @@ int main(int argc, char *argv[]) {
     LOG_I("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
     LOG_W("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
     LOG_E("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
     return 0;
 }
