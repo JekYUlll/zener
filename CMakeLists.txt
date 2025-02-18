@@ -21,5 +21,5 @@ add_subdirectory(tests)
 aux_source_directory(src ALL_SOURCES)
 add_executable(MyExecutable
     ${ALL_SOURCES}
-        src/log/log.cpp
+    src/log/log.cpp
 )
