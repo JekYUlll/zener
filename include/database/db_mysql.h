@@ -1,23 +1,23 @@
-#ifndef DB_MYSQL_H
-#define DB_MYSQL_H
+#ifndef ZENER_DB_MYSQL_H
+#define ZENER_DB_MYSQL_H
+
+#include "database/database.h"
 
 #include <mysql/mysql.h>
-#include <database/database.h>
+#include <string>
 
-namespace zws
-{
+namespace zws {
+namespace db {
 
-    class MYSQL : public Database
-    {
+class MYSQL : public Database {
 
-    public:
+  public:
+  private:
+    std::string _userName;
+    std::string _password;
+};
 
-    private:
-        std::string _userName;
-        std::string _password;
+} // namespace db
+} // namespace zws
 
-    };
-    
-}
-
-#endif // !DB_MYSQL_H
+#endif // !ZENER_DB_MYSQL_H

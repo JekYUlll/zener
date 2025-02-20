@@ -1,18 +1,23 @@
-# 收集源文件
+cmake_minimum_required(VERSION 3.22)
+
 file(GLOB_RECURSE SERVER_SOURCES 
     "${CMAKE_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/config/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/core/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/task/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/task/timer/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/buffer/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/database/*.cpp"
-    "${CMAKE_SOURCE_DIR}/src/error/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/http/*.cpp"
-    "${CMAKE_SOURCE_DIR}/src/log/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/json/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/net/*.cpp"
-    "${CMAKE_SOURCE_DIR}/src/pool/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/timer/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/file/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/utils/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/utils/log/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/utils/error/*.cpp"
 )
 
-# 添加服务器可执行文件
 add_executable(zener_server 
     server/main.cpp
     ${SERVER_SOURCES}

@@ -13,6 +13,8 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/third_party
 )
 
+add_definitions(-D__USE_SPDLOG)
+
 # 设置输出目录
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)

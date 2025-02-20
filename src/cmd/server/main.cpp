@@ -1,5 +1,5 @@
-#include "core/server.h"
-#include "log/logger.h"
+// #include "core/server.h"
+#include "utils/log/logger.h"
 #include <cstdlib>
 #include <iostream>
 #include <sys/stat.h>
@@ -7,7 +7,7 @@
 
 const char* log_path = "logs";
 
-int main(int argc, char* argv[]) {
+int main(void) {
 
     // WebServer server(
     //     1316, 3, 60000, false,             /* 端口 ET模式 timeoutMs 优雅退出

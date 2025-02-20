@@ -1,0 +1,7 @@
+[requires]
+boost/1.84.0   # Boost.Asio
+libuv/1.48.0   # 异步I/O库
+
+[generators]
+CMakeDeps      # 生成FindXXX.cmake文件
+CMakeToolchain # 生成conan_toolchain.cmake

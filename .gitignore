@@ -7,6 +7,10 @@ cmake-build-release/
 .cache/
 ._11origin/
 ._origin/
+.vscode/
+sql/data/
+
+temp.txt
 
 # Prerequisites
 *.d

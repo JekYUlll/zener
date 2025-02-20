@@ -1,21 +1,19 @@
-#ifndef DATABASE_H
-#define DATABASE_H
+#ifndef ZENER_DATABASE_H
+#define ZENER_DATABASE_H
 
 #include <mysql/mysql.h>
-#include <string>
 
 namespace zws {
+namespace db {
 
 class Database {
   public:
-    Database(std::string configPath);
     virtual ~Database();
-
-  private:
-    virtual void init() = 0;
-    unsigned int _port;
+    virtual void Init() = 0;
+    virtual void Close() = 0;
 };
 
+} // namespace db
 } // namespace zws
 
-#endif // !DATABASE_H
+#endif // !ZENER_DATABASE_H

@@ -1,30 +1,40 @@
-#ifndef ZWS_CONFIG_H
-#define ZWS_CONFIG_H
+#ifndef ZENER_CONFIG_H
+#define ZENER_CONFIG_H
 
 #include "common.h"
+
 #include <map>
 #include <string>
 
 namespace zws {
 
+#ifdef USE_TOMLPLUSPLUS
+struct Config {};
+#else
+
 struct Config {
     std::string configPath;
 
   public:
-    static bool Init(const std::string& configPath);
+    static bool Init(std::string const& configPath);
+
     static inline Config& getInstance() {
         static Config instance;
         return instance;
     }
 
   private:
-    static bool read(const std::string& filename,
+    static bool read(std::string const& filename,
                      std::map<std::string, std::string>& config);
 
-    Config() : configPath(ZWS_CONFIG_FILEPATH) {}
-    Config(const Config&) = delete;
-    Config& operator=(const Config&) = delete;
+    Config() : configPath(ZENER_CONFIG_FILEPATH) {}
+
+    Config(Config const&) = delete;
+    Config& operator=(Config const&) = delete;
 };
+
+#endif // !USE_TOMLPLUSPLUS
+
 } // namespace zws
 
-#endif // !ZWS_CONFIG_H
+#endif // !ZENER_CONFIG_H
