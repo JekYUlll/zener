@@ -9,13 +9,13 @@
 namespace zws {
 namespace db {
 
-class MYSQL : public Database {
+// class MYSQL : public Database {
 
-  public:
-  private:
-    std::string _userName;
-    std::string _password;
-};
+//   public:
+//   private:
+//     std::string _userName;
+//     std::string _password;
+// };
 
 } // namespace db
 } // namespace zws

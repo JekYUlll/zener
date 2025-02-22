@@ -18,7 +18,7 @@ file(GLOB_RECURSE SERVER_SOURCES
     "${CMAKE_SOURCE_DIR}/src/utils/error/*.cpp"
 )
 
-add_executable(zener_server 
+add_executable(Zener 
     server/main.cpp
     ${SERVER_SOURCES}
 )

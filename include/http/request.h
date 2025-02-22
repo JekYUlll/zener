@@ -10,45 +10,109 @@ Content-Length: length                                     \r\n (一条请求头
 UserID=string&PWD=string&OrderConfirmation=string                     (请求体)
 */
 
-#include "common.h"
-#include "file/file.h"
-#include "http/entity.h"
-#include "http/header.h"
+// 整个项目最麻烦的地方：字符串解析。直接抄了。
+
+#include "buffer/buffer.h"
+// #include "common.h"
+// #include "file/file.h"
+// #include "http/entity.h"
+// #include "http/header.h"
 
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include <vector>
+#include <unordered_set>
 
 namespace zws {
 namespace http {
 
-// HTTP + 加密 + 认证 + 完整性保护 = HTTPS
+// enum class HttpMethod {
+//     GET,
+//     PUT,
+//     POST,
+//     PATCH,
+// };
 
-enum class HttpMethod {
-    GET,
-    PUT,
-    POST,
-    PATCH,
-};
-
-class Request {
+class HttpRequest : std::enable_shared_from_this<HttpRequest> {
   public:
-    Request();
-    ~Request();
+    enum PARSE_STATE {
+        REQUEST_LINE,
+        HEADERS,
+        BODY,
+        FINISH,
+    };
 
-    std::string Method() const;
-    std::string Path() const;
-    std::unordered_map<std::string, std::string> Query() const;
-    std::unordered_map<std::string, std::string> Headers() const;
-    std::string Body() const;
+    enum HTTP_CODE {
+        NO_REQUEST = 0,
+        GET_REQUEST,
+        BAD_REQUEST,
+        NO_RESOURSE,
+        FORBIDDENT_REQUEST,
+        FILE_REQUEST,
+        INTERNAL_ERROR,
+        CLOSED_CONNECTION,
+    };
 
-    std::vector<File*> Files() const;
+    HttpRequest() { Init(); }
+    ~HttpRequest() = default;
+
+    void Init();
+    bool parse(Buffer& buff);
+
+    std::string path() const;
+    std::string& path();
+    std::string method() const;
+    std::string version() const;
+    std::string GetPost(const std::string& key) const;
+    std::string GetPost(const char* key) const;
+
+    bool IsKeepAlive() const;
+
+    /*
+    todo
+    void HttpConn::ParseFormData() {}
+    void HttpConn::ParseJson() {}
+    */
 
   private:
-    Entity _entity;
-    std::unique_ptr<Header> _pHeader;
+    bool ParseRequestLine_(const std::string& line);
+    void ParseHeader_(const std::string& line);
+    void ParseBody_(const std::string& line);
+
+    void ParsePath_();
+    void ParsePost_();
+    void ParseFromUrlencoded_();
+
+    static bool UserVerify(const std::string& name, const std::string& pwd,
+                           bool isLogin);
+
+    PARSE_STATE state_;
+    std::string method_, path_, version_, body_;
+    std::unordered_map<std::string, std::string> header_;
+    std::unordered_map<std::string, std::string> post_;
+
+    static const std::unordered_set<std::string> DEFAULT_HTML;
+    static const std::unordered_map<std::string, int> DEFAULT_HTML_TAG;
+    static int ConverHex(char ch);
 };
+
+// class Request {
+//   public:
+//     Request();
+//     ~Request();
+
+//     std::string Method() const;
+//     std::string Path() const;
+//     std::unordered_map<std::string, std::string> Query() const;
+//     std::unordered_map<std::string, std::string> Headers() const;
+//     std::string Body() const;
+
+//     std::vector<File*> Files() const;
+
+//   private:
+//     Entity _entity;
+//     std::unique_ptr<Header> _pHeader;
+// };
 
 } // namespace http
 } // namespace zws

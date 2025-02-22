@@ -19,9 +19,7 @@ std::mutex Logger::_fileNameMutex;
 
 static std::mutex sLoggerMutex;
 
-Logger::Logger() {
-    // 构造函数为空,初始化在Init()中完成
-}
+Logger::Logger() {}
 
 static std::string sFirstInitFile;
 static int sFirstInitLine;
@@ -54,7 +52,7 @@ void Logger::Init() {
 // @param sFileName: 日志文件名
 // @return: 是否成功写入文件
 bool Logger::WriteToFile(std::string_view sFileName) {
-    std::lock_guard<std::mutex> lock(sLoggerMutex); // 加锁保护
+    std::lock_guard<std::mutex> lock(sLoggerMutex);
     if (!sSpdLogger) {
         std::cerr << "Logger not initialized!" << std::endl;
         return false;

@@ -1,0 +1,7 @@
+
+
+namespace zws {
+
+void Init();
+
+}

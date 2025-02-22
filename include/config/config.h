@@ -3,8 +3,8 @@
 
 #include "common.h"
 
-#include <map>
 #include <string>
+#include <unordered_map>
 
 namespace zws {
 
@@ -18,19 +18,21 @@ struct Config {
   public:
     static bool Init(std::string const& configPath);
 
-    static inline Config& getInstance() {
-        static Config instance;
-        return instance;
-    }
+    ZENER_SHORT_FUNC static Config& getInstance() { return _instance; }
+
+    std::string GetConfig(const std::string& key);
 
   private:
-    static bool read(std::string const& filename,
-                     std::map<std::string, std::string>& config);
+    static Config _instance;
+
+    static bool read(std::string const& filename);
 
     Config() : configPath(ZENER_CONFIG_FILEPATH) {}
 
     Config(Config const&) = delete;
     Config& operator=(Config const&) = delete;
+
+    static std::unordered_map<std::string, std::string> _configMap;
 };
 
 #endif // !USE_TOMLPLUSPLUS

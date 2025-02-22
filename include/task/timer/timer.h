@@ -1,43 +1,28 @@
-#ifndef ZENER_TIMER_H
-#define ZENER_TIMER_H
+#ifndef ZENER_TIMER_HEAPTIMER_H
+#define ZENER_TIMER_HEAPTIMER_H
 
-#include <chrono>
-#include <functional>
-#include <unordered_map>
-#include <vector>
+#include "task/timer/heaptimer.h"
+#include "task/timer/maptimer.h"
 
 namespace zws {
 
-typedef std::function<void()> TimeoutCallBack;
-typedef std::chrono::high_resolution_clock Clock;
-typedef std::chrono::milliseconds MS;
-typedef Clock::time_point TimeStamp;
+// TODO 实现时间轮算法
+// 感觉时间轮也是一种变相的哈希
 
-struct TimerNode {
-    int id;
-    TimeStamp expires;
-    TimeoutCallBack cb;
-    bool operator<(const TimerNode& other) { return expires < other.expires; }
-};
+using heaptimer::HeapTimer;
 
-class HeapTimer {
-  public:
-    HeapTimer();
+using maptimer::TimerManager;
 
-  private:
-    void del(size_t i);
+// #define Timer HeapTimer
 
-    void siftUp(size_t i);
+// template <typename TimerImpl>
+// class Timer {
+//     TimerImpl timer;
 
-    void siftDown(size_t index, size_t n);
-
-    void swapNode(size_t i, size_t j);
-
-    std::vector<TimerNode> _heap;
-
-    std::unordered_map<int, size_t> _ref;
-};
+//   public:
+//     void schedule() { timer.schedule; }
+// };
 
 } // namespace zws
 
-#endif // !ZENER_TIMER_H
+#endif // !ZENER_TIMER_HEAPTIMER_H

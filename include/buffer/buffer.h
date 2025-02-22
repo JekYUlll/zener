@@ -84,7 +84,7 @@ class Buffer {
     std::string RetrieveAllToString();
     std::string ToString() const;
 
-    ZENER_INLINE void HasWritten(size_t len) { _writePos += len; }
+    inline void HasWritten(size_t len) { _writePos += len; }
 
     void Append(const std::string& str);
     void Append(const void* data, size_t len);

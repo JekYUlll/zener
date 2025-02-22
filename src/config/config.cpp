@@ -1,21 +1,22 @@
 #include "config/config.h"
-#include "log/logger.h"
 #include "utils/hash.hpp"
+#include "utils/log/logger.h"
+#include <cassert>
 #include <fstream>
-#include <map>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 
 namespace zws {
 
-bool Config::read(std::string const & filename,
-                  std::map<std::string, std::string>& config) {
+Config Config::_instance;
+
+bool Config::read(std::string const& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         LOG_E("Failed to open config file: {}", filename);
         return false;
     }
-
     std::string line;
     std::string currentSection;
     while (std::getline(file, line)) {
@@ -56,20 +57,20 @@ bool Config::read(std::string const & filename,
                 value.back() == '"') {
                 value = value.substr(1, value.length() - 2);
             }
-            config[key] = value;
+            _configMap[key] = value;
         }
     }
     return true;
 }
 
-bool Config::Init(std::string const & configPath) {
+bool Config::Init(std::string const& configPath) {
     auto& config = getInstance();
-    std::map<std::string, std::string> configMap;
-    if (!read(configPath, configMap)) {
+    // std::map<std::string, std::string> configMap;
+    if (!read(configPath)) {
         LOG_E("Failed to read config file");
         return false;
     }
-    for (auto const& [key, value]: configMap) {
+    for (auto const& [key, value] : _configMap) {
         try {
             switch (hash_str(key.c_str(), key.length())) {
             // case "window.width"_hash:
@@ -113,9 +114,11 @@ bool Config::Init(std::string const & configPath) {
             // case "similarity.similarityHistorySize"_hash:
             //     config.similarityHistorySize = std::stoi(value);
             //     break;
-            default: LOG_W("Unknown config key: {}", key); break;
+            default:
+                LOG_W("Unknown config key: {}", key);
+                break;
             }
-        } catch (std::exception const & e) {
+        } catch (std::exception const& e) {
             LOG_E("Error parsing config value for {}: {}", key, e.what());
         }
     }
@@ -161,6 +164,15 @@ bool Config::Init(std::string const & configPath) {
     // }
 
     return true;
+}
+
+std::string Config::GetConfig(const std::string& key) {
+    auto it = _configMap.find(key);
+    if (it != _configMap.end()) {
+        return it->second;
+    }
+    LOG_W("Config '{}' not found", key);
+    return "";
 }
 
 } // namespace zws
