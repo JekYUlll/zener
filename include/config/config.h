@@ -10,7 +10,7 @@ namespace zws {
 
 #ifdef USE_TOMLPLUSPLUS
 struct Config {};
-#else
+#else // !USE_TOMLPLUSPLUS
 
 struct Config {
     std::string configPath;

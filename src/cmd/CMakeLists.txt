@@ -18,10 +18,9 @@ file(GLOB_RECURSE SERVER_SOURCES
     "${CMAKE_SOURCE_DIR}/src/utils/error/*.cpp"
 )
 
-add_executable(Zener 
+add_executable(zener 
     server/main.cpp
     ${SERVER_SOURCES}
 )
 
-# 如果需要链接其他库
-# target_link_libraries(zener_server pthread)
+

@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.22)
-project(zener_web_server)
+project(zener)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 add_definitions("-O0 -g -ggdb -Wno-unused-variable")
 
 include_directories(
@@ -20,3 +21,14 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 # 添加子目录
 add_subdirectory(src)
 add_subdirectory(tests)
+
+# find_package(MYSQL REQUIRED)
+
+# 查找 MySQL SDK
+#set(MYSQLCLIENT_STATIC_LINKING true)
+#set(FINDMYSQL_DEBUG true)
+find_package(MySQL REQUIRED)
+include_directories(${MYSQL_INCLUDE_DIRS})
+# target_link_libraries(zener PRIVATE MYSQL::mysqlclient)
+target_link_libraries(zener ${MYSQL_LIBRARIES})
+

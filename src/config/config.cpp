@@ -11,6 +11,8 @@ namespace zws {
 
 Config Config::_instance;
 
+std::unordered_map<std::string, std::string> Config::_configMap;
+
 bool Config::read(std::string const& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -123,26 +125,6 @@ bool Config::Init(std::string const& configPath) {
         }
     }
 
-    // // 验证配置值的合法性
-    // config.windowWidth = std::max(640, std::min(1920, config.windowWidth));
-    // config.windowHeight = std::max(480, std::min(1080, config.windowHeight));
-    // config.displayFPS = std::max(30, std::min(120, config.displayFPS));
-    // config.recordFPS = std::max(10, std::min(60, config.recordFPS));
-    // config.compareFPS = std::max(1, std::min(30, config.compareFPS));
-    // config.actionBufferSize =
-    //     std::max(20, std::min(300, config.actionBufferSize));
-
-    // config.speedWeight = std::max(0.0f, std::min(1.0f, config.speedWeight));
-    // config.minSpeedRatio = std::max(0.1f, config.minSpeedRatio);
-    // config.maxSpeedRatio =
-    //     std::max(config.minSpeedRatio + 0.1f, config.maxSpeedRatio);
-    // config.minSpeedPenalty =
-    //     std::max(0.0f, std::min(1.0f, config.minSpeedPenalty));
-    // config.dtwBandwidthRatio =
-    //     std::max(0.1f, std::min(1.0f, config.dtwBandwidthRatio));
-    // config.similarityThreshold =
-    //     std::max(0.0f, std::min(1.0f, config.similarityThreshold));
-
     // LOG_I("Configuration loaded:\n"
     //       "  Window: {}x{}\n"
     //       "  FPS: display={}, record={}, compare={}\n"
@@ -155,13 +137,6 @@ bool Config::Init(std::string const& configPath) {
     //       config.speedWeight, config.minSpeedRatio, config.maxSpeedRatio,
     //       config.minSpeedPenalty, config.dtwBandwidthRatio,
     //       config.similarityThreshold);
-
-    // try {
-    //     g_actionTemplate =
-    //         std::make_unique<ActionTemplate>(config.standardPath);
-    // } catch (std::exception const & e) {
-    //     LOG_E("Load standard action: {}", e.what());
-    // }
 
     return true;
 }
