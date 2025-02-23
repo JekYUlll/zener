@@ -1,6 +1,10 @@
 #ifndef ZENER_THREADPOOL1_H
 #define ZENER_THREADPOOL1_H
 
+/**
+ * 半同步/半反应堆线程池:内包含一个工作队列，主线程（线程池的创建者）往工作队列中插入任务，工作线程通过竞争来取得任务并执行它。
+ */
+
 #include <cassert>
 #include <condition_variable>
 #include <functional>
@@ -11,7 +15,7 @@
 #include <thread>
 
 namespace zws {
-namespace v1 {
+namespace v0 {
 
 class ThreadPool {
   public:
@@ -118,7 +122,7 @@ class ThreadPool {
     // }
 };
 
-} // namespace v1
+} // namespace v0
 } // namespace zws
 
 #endif // !ZENER_THREADPOOL1_H

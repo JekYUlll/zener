@@ -4,7 +4,7 @@
 #include <utility>
 
 namespace zws {
-namespace heaptimer {
+namespace v0 {
 
 HeapTimer::HeapTimer() {
     // std::vector::reserve 用于为 std::vector
@@ -147,5 +147,5 @@ int HeapTimer::GetNextTick() {
     return res;
 }
 
-} // namespace heaptimer
+} // namespace v0
 } // namespace zws

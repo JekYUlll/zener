@@ -12,8 +12,8 @@ epoll_ctl
 epoll_wait
 */
 
-Epoller::Epoller(int maxEvent)
-    : _epollFd(epoll_create(512)), _events(maxEvent) {
+Epoller::Epoller(int maxEvent, bool isET)
+    : _epollFd(epoll_create(512)), _events(maxEvent), _isET(isET) {
     assert(_epollFd >= 0 && _events.size() > 0);
 }
 
@@ -26,6 +26,8 @@ bool Epoller::AddFd(int fd, uint32_t events) {
     epoll_event ev = {0};
     ev.data.fd = fd;
     ev.events = events;
+    ev.events = _isET ? EPOLLIN | EPOLLET
+                      : EPOLLIN; // 不知是否需要，原代码中没有设置 _isET
     return 0 == epoll_ctl(_epollFd, EPOLL_CTL_ADD, fd, &ev);
 }
 

@@ -3,7 +3,9 @@
 
 // 编译期无法直接获取 CPU 内核数，因为 CPU 内核数是与运行环境相关的信息
 
-#include "utils/safequeue.h"
+// TODO 源文件拆分
+
+#include "utils/safequeue.hpp"
 
 #include <functional>
 #include <future>
@@ -33,15 +35,13 @@ class ThreadPool {
             while (!_pool->_shutdown) {
                 {
                     // 为线程环境加锁，互访问工作线程的休眠和唤醒
-                    std::unique_lock<std::mutex> lock(
-                        _pool->m_conditional_mutex);
+                    std::unique_lock<std::mutex> lock(_pool->_mtx);
                     // 如果任务队列为空，阻塞当前线程
-                    if (_pool->m_queue.empty()) {
-                        _pool->m_conditional_lock.wait(
-                            lock); // 等待条件变量通知，开启线程
+                    if (_pool->_queue.empty()) {
+                        _pool->_con.wait(lock); // 等待条件变量通知，开启线程
                     }
                     // 取出任务队列中的元素
-                    dequeued = _pool->m_queue.dequeue(func);
+                    dequeued = _pool->_queue.dequeue(func);
                 }
                 // 如果成功取出，执行工作函数
                 if (dequeued) {
@@ -53,18 +53,17 @@ class ThreadPool {
 
     bool _shutdown; // 线程池是否关闭
 
-    SafeQueue<std::function<void()>> m_queue; // 执行函数安全队列，即任务队列
+    SafeQueue<std::function<void()>> _queue; // 执行函数安全队列，即任务队列
 
-    std::vector<std::thread> m_threads; // 工作线程队列
+    std::vector<std::thread> _threads; // 工作线程队列
 
-    std::mutex m_conditional_mutex; // 线程休眠锁互斥变量
+    std::mutex _mtx; // 线程休眠锁互斥变量
 
-    std::condition_variable
-        m_conditional_lock; // 线程环境锁，可以让线程处于休眠或者唤醒状态
+    std::condition_variable _con; // 线程环境锁，可以让线程处于休眠或者唤醒状态
 
   public:
     ThreadPool(const int n_threads = THREAD_NUM)
-        : m_threads(std::vector<std::thread>(n_threads)), _shutdown(false) {}
+        : _threads(std::vector<std::thread>(n_threads)), _shutdown(false) {}
 
     ThreadPool(ThreadPool const&) = delete;
 
@@ -76,21 +75,19 @@ class ThreadPool {
 
     // Inits thread pool
     void init() {
-        for (int i = 0; i < m_threads.size(); ++i) {
-            m_threads.at(i) =
-                std::thread(ThreadWorker(this, i)); // 分配工作线程
+        for (int i = 0; i < _threads.size(); ++i) {
+            _threads.at(i) = std::thread(ThreadWorker(this, i)); // 分配工作线程
         }
     }
 
     // Waits until threads finish their current task and shutdowns the pool
     void shutdown() {
         _shutdown = true;
-        m_conditional_lock.notify_all(); // 通知，唤醒所有工作线程
-
-        for (int i = 0; i < m_threads.size(); ++i) {
-            if (m_threads.at(i).joinable()) // 判断线程是否在等待
+        _con.notify_all(); // 通知，唤醒所有工作线程
+        for (int i = 0; i < _threads.size(); ++i) {
+            if (_threads.at(i).joinable()) // 判断线程是否在等待
             {
-                m_threads.at(i).join(); // 将线程加入到等待队列
+                _threads.at(i).join(); // 将线程加入到等待队列
             }
         }
     }
@@ -110,10 +107,10 @@ class ThreadPool {
         std::function<void()> warpper_func = [task_ptr]() { (*task_ptr)(); };
 
         // 队列通用安全封包函数，并压入安全队列
-        m_queue.enqueue(warpper_func);
+        _queue.enqueue(warpper_func);
 
         // 唤醒一个等待中的线程
-        m_conditional_lock.notify_one();
+        _con.notify_one();
 
         // 返回先前注册的任务指针
         return task_ptr->get_future();

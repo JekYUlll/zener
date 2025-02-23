@@ -3,8 +3,16 @@
 
 #include "common.h"
 
+// TODO
+// 封装一个总的 logger 类，按编译选项设置是否使用 spdlog
+
 #ifdef __USE_SPDLOG
 #include "use_spd_log.h"
+#else
+#include "_logger.h"
+#endif
+
+#ifdef __USE_SPDLOG
 namespace zws {
 
 class GLogger {

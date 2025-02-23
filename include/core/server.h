@@ -1,78 +1,103 @@
 #ifndef ZENER_SERVER_H
 #define ZENER_SERVER_H
 
-#include "core/restful.h"
-#include "database/database.h"
-#include "utils/log/logger.h"
+#include "core/epoller.h"
+#include "http/conn.h"
+#include "task/threadpool_1.h"
+#include "task/timer/heaptimer.h"
 
+#include <cstdint>
 #include <cstdlib>
-#include <iostream>
 #include <memory>
-#include <string>
+#include <netinet/in.h>
 #include <sys/stat.h>
+#include <unordered_map>
 
 namespace zws {
+namespace v0 {
 
-#define LOG_PATH "logs"
-
-class Server : public IRestful {
+class WebServer {
   public:
-    Server(const int& port, const db::Database* db) {
+    WebServer(int port, int trigMode, int timeoutMS, bool OptLinger,
+              int sqlPort, const char* sqlUser, const char* sqlPwd,
+              const char* dbName, int connPoolNum, int threadNum, bool openLog,
+              int logLevel, int logQueSize);
 
-        if (mkdir(LOG_PATH, 0777) != 0 && errno != EEXIST) {
-            std::cerr << "Failed to create log directory" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-
-        zws::Logger::Init();
-        if (!zws::Logger::WriteToFile("logs/test.log")) {
-            std::cerr << "Failed to create log file" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-        LOG_I(R"(
-          _______ _ __   ___ _ __ 
-         |_  / _ \ '_ \ / _ \ '__|
-          / /  __/ | | |  __/ |   
-         /___\___|_| |_|\___|_|   
-         )");
-        LOG_T("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
-        LOG_D("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
-        LOG_I("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
-        LOG_W("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
-        LOG_E("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
-        zws::Logger::SetLogFilePath("logs/test2.log");
-        LOG_T("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
-        LOG_D("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
-        LOG_I("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
-        LOG_W("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
-        LOG_E("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
-    }
-
-    ~Server();
-
-    std::unique_ptr<Server> Default();
-
-    void ListenAndServe(const std::string& address = ":8080");
+    ~WebServer();
 
     void Start();
-    void Spin();
-    void Stop();
-    void Shutdown();
-
-    void GET(const std::string& router, Handler h) override;
-    void POST(const std::string& router, Handler h) override;
-    void PUT(const std::string& router, Handler h) override;
-    void HEAD(const std::string& router, Handler h) override;
-
-    void Handle();
-    void Any();
 
   private:
+    bool initSocket();
+    void initEventMode(int trigMode);
+    void addClient(int fd, sockaddr_in addr);
+
+    void dealListen();
+    void dealRead(http::Conn* client);
+    void dealWrite(http::Conn* client);
+
+    void sendError(int fd, const char* info);
+    void extentTime(http::Conn* client);
+    void closeConn(http::Conn* client);
+
+    void onRead(http::Conn* client);
+    void onWrite(http::Conn* client);
+    void onProcess(http::Conn* client);
+
+    static const int MAX_FD = 65535;
+
+    static int SetFdNonblock(int fd);
+
     int _port;
-    std::shared_ptr<db::Database> _db;
-    // std::unique_ptr<ThreadPool> m_threadPool;
-    // std::unique_ptr<EventLoop> m_loop;
+    bool _openLinger;
+    int _timeoutMS;
+    bool _isClose;
+    int _listenFd;
+    char* _srcDir;
+
+    uint32_t _listenEvent;
+    uint32_t _connEvent;
+
+    std::unique_ptr<v0::HeapTimer> _timer;
+
+    std::unique_ptr<v0::ThreadPool> _threadpool;
+
+    std::unique_ptr<Epoller> _epoller;
+
+    std::unordered_map<int, http::Conn> _users;
 };
+
+} // namespace v0
+} // namespace zws
+
+// class Server : public IRestful {
+//   public:
+//     Server(const int& port, const db::Database* db);
+//     ~Server();
+
+//     std::unique_ptr<Server> Default();
+
+//     void ListenAndServe(const std::string& address = ":8080");
+
+//     void Start();
+//     void Spin();
+//     void Stop();
+//     void Shutdown();
+
+//     void GET(const std::string& router, Handler h) override;
+//     void POST(const std::string& router, Handler h) override;
+//     void PUT(const std::string& router, Handler h) override;
+//     void HEAD(const std::string& router, Handler h) override;
+
+//     void Handle();
+//     void Any();
+
+//   private:
+//     int _port;
+//     std::shared_ptr<db::Database> _db;
+//     // std::unique_ptr<ThreadPool> m_threadPool;
+//     // std::unique_ptr<EventLoop> m_loop;
+// };
 
 // 类似Go的 http.FileServer
 // server.ServerStatic("/static", "./public");
@@ -101,7 +126,5 @@ class Server : public IRestful {
 
 // // 自定义协议支持
 // server.AddProtocolHandler("websocket", WebSocketHandler);
-
-} // namespace zws
 
 #endif // !ZENER_SERVER_H

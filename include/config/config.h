@@ -18,9 +18,9 @@ struct Config {
   public:
     static bool Init(std::string const& configPath);
 
-    ZENER_SHORT_FUNC static Config& getInstance() { return _instance; }
+    _ZENER_SHORT_FUNC static Config& getInstance() { return _instance; }
 
-    std::string GetConfig(const std::string& key);
+    const char* GetConfig(const std::string& key);
 
   private:
     static Config _instance;
@@ -34,6 +34,8 @@ struct Config {
 
     static std::unordered_map<std::string, std::string> _configMap;
 };
+
+#define GET_CONFIG(key) Config::getInstance().GetConfig(key)
 
 #endif // !USE_TOMLPLUSPLUS
 

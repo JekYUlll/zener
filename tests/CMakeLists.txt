@@ -1,7 +1,6 @@
-# 如果有测试用例，在这里添加
-# enable_testing()
+cmake_minimum_required(VERSION 3.22)
 
-# 示例：添加测试可执行文件
-# file(GLOB TEST_SOURCES "*.cpp")
-# add_executable(unit_tests ${TEST_SOURCES})
-# target_link_libraries(unit_tests gtest gtest_main)
+add_executable(log_test
+    ${SERVER_SOURCES}
+    log_test/main.cpp
+)

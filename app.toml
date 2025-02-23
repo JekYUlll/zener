@@ -2,15 +2,14 @@
 name = "zener"
 
 [log]
-level = "DEBUG"
-path = "logs"
-name = "logs/test.log"
+log_level = "DEBUG"
+log_path = "logs"
 
 [mysql]
 host = "127.0.0.1"
 port = 3306
 user = "root"
-password = "root"
+password = "donotpanic"
 database = "zener_test"
 
 [redis]

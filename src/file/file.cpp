@@ -2,6 +2,6 @@
 
 namespace zws {
 
-File::File(const std::string& path) {}
+// File::File(const std::string& path) {}
 
 } // namespace zws

@@ -2,6 +2,7 @@
 #include "utils/hash.hpp"
 #include "utils/log/logger.h"
 #include <cassert>
+#include <cstddef>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -53,7 +54,6 @@ bool Config::read(std::string const& filename) {
                 value = value.substr(0, commentPos);
                 value.erase(value.find_last_not_of(" \t") + 1);
             }
-
             // 移除引号（如果存在）
             if (value.length() >= 2 && value.front() == '"' &&
                 value.back() == '"') {
@@ -141,13 +141,15 @@ bool Config::Init(std::string const& configPath) {
     return true;
 }
 
-std::string Config::GetConfig(const std::string& key) {
+const char* Config::GetConfig(const std::string& key) {
+    static std::string cache;
     auto it = _configMap.find(key);
     if (it != _configMap.end()) {
-        return it->second;
+        cache = it->second;
+        return cache.c_str();
     }
     LOG_W("Config '{}' not found", key);
-    return "";
+    return nullptr;
 }
 
 } // namespace zws

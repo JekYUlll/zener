@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace zws {
-namespace heaptimer {
+namespace v0 {
 
 typedef std::function<void()> TimeoutCallBack;
 typedef std::chrono::high_resolution_clock Clock;
@@ -58,7 +58,7 @@ class HeapTimer {
     std::unordered_map<int, size_t> _ref;
 };
 
-} // namespace heaptimer
+} // namespace v0
 } // namespace zws
 
 #endif // !ZENER_TIMER_H

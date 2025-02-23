@@ -105,7 +105,7 @@ ssize_t Buffer::ReadFd(int fd, int* saveErrno) {
     的解决方案：将读取分散在两块区域，一块是`buffer`，一块是栈上的`extrabuf`（放置在栈上使得`extrabuf`随着`Read`的结束而释放，不会占用额外空间），当初始的小`buffer`放不下时才扩容
     */
     char extrabuff[65535];
-    // 用于进行分散 - 聚集 I/O（Scatter - Gather I/O）操作。
+    // struct iovec 用于进行分散 - 聚集 I/O（Scatter - Gather I/O）操作。
     // 允许程序在一次系统调用中从多个缓冲区读取数据（聚集）或向多个缓冲区写入数据（分散）
     struct iovec iov[2];
     const size_t writable = WritableBytes();

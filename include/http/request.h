@@ -59,8 +59,9 @@ class HttpRequest : std::enable_shared_from_this<HttpRequest> {
     void Init();
     bool parse(Buffer& buff);
 
-    std::string path() const;
-    std::string& path();
+    _ZENER_SHORT_FUNC const std::string path() const { return path_; }
+    _ZENER_SHORT_FUNC std::string& path() { return path_; }
+
     std::string method() const;
     std::string version() const;
     std::string GetPost(const std::string& key) const;

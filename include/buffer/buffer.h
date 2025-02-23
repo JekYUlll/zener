@@ -9,9 +9,11 @@
 +-------------------+------------------+------------------+------------------+
 |                   |                  |                  |                  |
 0        <=       prePos      <=    readPos     <=     writerPos    <=     size
+
 // 实际上似乎没必要抽象出 prependable bytes 和
 prePos？读过的地方直接就能覆盖？直接用 readPos 当做 prePos 就行了？
 // 11 版本里的实现并没有 prePos
+
 */
 
 #include "common.h"
@@ -43,36 +45,36 @@ class Buffer {
     Buffer& operator=(Buffer&& other) noexcept;
 
     // 可写的字节数
-    ZENER_SHORT_FUNC size_t WritableBytes() const {
+    _ZENER_SHORT_FUNC size_t WritableBytes() const {
         return _buffer.size() - _writePos;
     }
     // 未读的字节数
-    ZENER_SHORT_FUNC size_t ReadableBytes() const {
+    _ZENER_SHORT_FUNC size_t ReadableBytes() const {
         return _writePos - _readPos;
     }
     // 已读的字节数
-    // ZENER_SHORT_FUNC size_t ReadedBytes() const { return _readPos - _prePos;
+    // _ZENER_SHORT_FUNC size_t ReadedBytes() const { return _readPos - _prePos;
     // }
 
     // 可以用于前插的字节数
-    ZENER_SHORT_FUNC std::size_t PrependableBytes() const { return _readPos; }
+    _ZENER_SHORT_FUNC std::size_t PrependableBytes() const { return _readPos; }
 
-    // ZENER_SHORT_FUNC char* GetPrePtr() { return beginPtr() + _prePos; }
-    // ZENER_SHORT_FUNC const char* GetPrePtr() const {
+    // _ZENER_SHORT_FUNC char* GetPrePtr() { return beginPtr() + _prePos; }
+    // _ZENER_SHORT_FUNC const char* GetPrePtr() const {
     //     return beginPtr() + _prePos;
     // }
 
-    ZENER_SHORT_FUNC char* GetWritePtr() { return beginPtr() + _writePos; }
-    ZENER_SHORT_FUNC const char* GetWritePtr() const {
+    _ZENER_SHORT_FUNC char* GetWritePtr() { return beginPtr() + _writePos; }
+    _ZENER_SHORT_FUNC const char* GetWritePtr() const {
         return beginPtr() + _writePos;
     }
 
     // GetReadPtr
-    ZENER_SHORT_FUNC char* Peek() { return beginPtr() + _readPos; }
-    ZENER_SHORT_FUNC const char* Peek() const { return beginPtr() + _readPos; }
+    _ZENER_SHORT_FUNC char* Peek() { return beginPtr() + _readPos; }
+    _ZENER_SHORT_FUNC const char* Peek() const { return beginPtr() + _readPos; }
 
-    ZENER_SHORT_FUNC char* BeginWrite() { return beginPtr() + _writePos; }
-    ZENER_SHORT_FUNC const char* BeginWrite() const {
+    _ZENER_SHORT_FUNC char* BeginWrite() { return beginPtr() + _writePos; }
+    _ZENER_SHORT_FUNC const char* BeginWrite() const {
         return beginPtr() + _writePos;
     }
 
@@ -97,8 +99,8 @@ class Buffer {
     ssize_t WriteFd(int fd, int* saveErrno);
 
   private:
-    ZENER_SHORT_FUNC char* beginPtr() { return &*_buffer.begin(); }
-    ZENER_SHORT_FUNC const char* beginPtr() const { return &*_buffer.begin(); }
+    _ZENER_SHORT_FUNC char* beginPtr() { return &*_buffer.begin(); }
+    _ZENER_SHORT_FUNC const char* beginPtr() const { return &*_buffer.begin(); }
 
     void makeSpace(size_t len);
 
