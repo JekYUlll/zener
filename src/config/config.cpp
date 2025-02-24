@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <sstream>
@@ -20,6 +21,24 @@ std::unordered_map<std::string, std::string> Config::_configMap;
 std::atomic<bool> Config::_initialized = false;
 
 bool Config::read(std::string const& filename) {
+    namespace fs = std::filesystem;
+    // 检查文件是否存在
+    if (!fs::exists(filename)) {
+        LOG_E("config file does not exist: {}", filename);
+        return false;
+    }
+    // 莫名其妙 config.toml 没权限了导致失败，增加权限的判断和修改 --2025/02/24
+    auto perms = fs::status(filename).permissions();
+    if ((perms & fs::perms::owner_read) == fs::perms::none) {
+        LOG_W("config file lacks read permission, attempting to add...");
+        try {
+            fs::permissions(filename, fs::perms::owner_read,
+                            fs::perm_options::add);
+        } catch (const fs::filesystem_error& e) {
+            LOG_E("failed to add read permission: {}", e.what());
+            return false;
+        }
+    }
     std::ifstream file(filename);
     if (!file.is_open()) {
         LOG_E("failed to open config file: {}", filename);
@@ -35,8 +54,7 @@ bool Config::read(std::string const& filename) {
         // 去除首尾空格
         line.erase(0, line.find_first_not_of(" \t"));
         line.erase(line.find_last_not_of(" \t") + 1);
-        // 处理TOML节
-        if (line[0] == '[' && line[line.length() - 1] == ']') {
+        if (line[0] == '[' && line[line.length() - 1] == ']') { // 处理TOML节
             currentSection = line.substr(1, line.length() - 2);
             continue;
         }
@@ -48,7 +66,6 @@ bool Config::read(std::string const& filename) {
             key.erase(key.find_last_not_of(" \t") + 1);
             value.erase(0, value.find_first_not_of(" \t"));
             value.erase(value.find_last_not_of(" \t") + 1);
-
             // 如果在某个节中，添加节名作为前缀
             if (!currentSection.empty()) {
                 key = currentSection + "." + key;
@@ -72,7 +89,7 @@ bool Config::read(std::string const& filename) {
 
 bool Config::Init(const std::string& configPath) {
     if (Initialized()) {
-        LOG_D("already initilized before");
+        LOG_D("already initilized before.");
         return true;
     }
     auto& config = GetInstance();
@@ -95,18 +112,6 @@ bool Config::Init(const std::string& configPath) {
     //         LOG_E("Error parsing config value for {}: {}", key, e.what());
     //     }
     // }
-    // LOG_I("Configuration loaded:\n"
-    //       "  Window: {}x{}\n"
-    //       "  FPS: display={}, record={}, compare={}\n"
-    //       "  Standard action: {}\n"
-    //       "  Similarity: weight={:.2f}, speedRatio={:.2f}-{:.2f}, "
-    //       "penalty={:.2f}, "
-    //       "bandWidth={:.2f}, threshold={:.2f}",
-    //       config.windowWidth, config.windowHeight, config.displayFPS,
-    //       config.recordFPS, config.compareFPS, config.standardPath,
-    //       config.speedWeight, config.minSpeedRatio, config.maxSpeedRatio,
-    //       config.minSpeedPenalty, config.dtwBandwidthRatio,
-    //       config.similarityThreshold);
     _initialized.store(true, std::memory_order_release);
     return true;
 }

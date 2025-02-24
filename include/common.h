@@ -6,7 +6,8 @@
 #include "utils/hash.hpp"
 #include "utils/log/logger.h"
 
-#define ZENER_CONFIG_FILEPATH "config/config.toml"
+// 实际上没有用到
+#define ZENER_CONFIG_FILEPATH "config.toml"
 
 #ifdef __USE_STRING
 namespace zws {

@@ -1,6 +1,9 @@
 #ifndef ZENER_CONFIG_H
 #define ZENER_CONFIG_H
 
+// TODO:
+// 添加配置的一些持久化，保持到本地（数据库读取依赖于config，似乎不能存数据库）
+
 #include "common.h"
 
 #include <atomic>
@@ -42,6 +45,8 @@ struct Config {
 
     static bool read(const std::string& filename);
 
+    // 使用哈希表而不是红黑树，此处好处是查找更快，坏处是 Print
+    // 的时候键不是有序的
     static std::unordered_map<std::string, std::string> _configMap;
 
     static std::atomic<bool> _initialized;

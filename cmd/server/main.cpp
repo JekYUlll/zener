@@ -17,7 +17,7 @@ int main(void) {
 
     zws::Config::Print();
 
-    server->Start(); // 没有调用
+    server->Start();
 
     return EXIT_SUCCESS;
 }

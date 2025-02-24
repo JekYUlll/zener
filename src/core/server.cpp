@@ -37,6 +37,10 @@ WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
 
     // @log init
     Logger::Init();
+
+    // @config init
+    Config::Init("config.toml");
+
     // 接受两个参数：缓冲区 char *buf 和 缓冲区大小
     _srcDir = getcwd(nullptr, 256);
     assert(_srcDir);
@@ -53,8 +57,6 @@ WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
         _isClose = true;
     }
 
-    // @config init
-    Config::Init("config.toml");
     // TODO
     // 检查 log 是否初始化，如果没有，直接不打印 LOG
     // 或者控制是否打印至文件
@@ -361,12 +363,7 @@ int WebServer::SetFdNonblock(int fd) {
 
 std::unique_ptr<v0::WebServer>
 NewServerFromConfig(const std::string& configPath) {
-    if (!Config::Initialized()) {
-        Config::Init(configPath);
-    }
-
-    zws::Config::Init(configPath);
-
+    Config::Init(configPath);
     // TODO 更改 config 的接口，获取的时候通过不同函数直接转换为 int 或者 uint
 
     auto appPort = atoi(zws::GET_CONFIG("app.port").c_str());
