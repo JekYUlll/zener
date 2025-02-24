@@ -65,65 +65,28 @@ bool Config::read(std::string const& filename) {
     return true;
 }
 
-bool Config::Init(std::string const& configPath) {
+bool Config::Init(const std::string& configPath) {
     auto& config = getInstance();
     // std::map<std::string, std::string> configMap;
     if (!read(configPath)) {
         LOG_E("Failed to read config file");
         return false;
     }
-    for (auto const& [key, value] : _configMap) {
-        try {
-            switch (hash_str(key.c_str(), key.length())) {
-            // case "window.width"_hash:
-            //     config.windowWidth = std::stoi(value);
-            //     break;
-            // case "window.height"_hash:
-            //     config.windowHeight = std::stoi(value);
-            //     break;
-            // case "fps.display"_hash:
-            //     config.displayFPS = std::stoi(value);
-            //     break;
-            // case "fps.record"_hash: config.recordFPS = std::stoi(value);
-            // break; case "fps.compare"_hash:
-            //     config.compareFPS = std::stoi(value);
-            //     break;
-            // case "action.standardPath"_hash: config.standardPath = value;
-            // break; case "action.bufferSize"_hash:
-            //     config.actionBufferSize = std::stoi(value);
-            //     break;
-            // case "similarity.speedWeight"_hash:
-            //     config.speedWeight = std::stof(value);
-            //     break;
-            // case "similarity.minSpeedRatio"_hash:
-            //     config.minSpeedRatio = std::stof(value);
-            //     break;
-            // case "similarity.maxSpeedRatio"_hash:
-            //     config.maxSpeedRatio = std::stof(value);
-            //     break;
-            // case "similarity.minSpeedPenalty"_hash:
-            //     config.minSpeedPenalty = std::stof(value);
-            //     break;
-            // case "similarity.dtwBandwidthRatio"_hash:
-            //     config.dtwBandwidthRatio = std::stof(value);
-            //     break;
-            // case "similarity.threshold"_hash:
-            //     config.similarityThreshold = std::stof(value);
-            //     break;
-            // case "similarity.difficulty"_hash:
-            //     config.difficulty = std::stoi(value);
-            //     break;
-            // case "similarity.similarityHistorySize"_hash:
-            //     config.similarityHistorySize = std::stoi(value);
-            //     break;
-            default:
-                LOG_W("Unknown config key: {}", key);
-                break;
-            }
-        } catch (std::exception const& e) {
-            LOG_E("Error parsing config value for {}: {}", key, e.what());
-        }
-    }
+    // 如果需要在初始化的时候直接进行判断和赋值。暂时不需要
+    // for (auto const& [key, value] : _configMap) {
+    //     try {
+    //         switch (hash_str(key.c_str(), key.length())) {
+    //             // case "window.width"_hash:
+    //             //     config.windowWidth = std::stoi(value);
+    //             //     break;
+    //         default:
+    //             LOG_W("Unknown config key: {}", key);
+    //             break;
+    //         }
+    //     } catch (std::exception const& e) {
+    //         LOG_E("Error parsing config value for {}: {}", key, e.what());
+    //     }
+    // }
 
     // LOG_I("Configuration loaded:\n"
     //       "  Window: {}x{}\n"
@@ -141,15 +104,14 @@ bool Config::Init(std::string const& configPath) {
     return true;
 }
 
-const char* Config::GetConfig(const std::string& key) {
-    static std::string cache;
+const std::string& Config::GetConfig(const std::string& key) {
+    static const std::string empty;
     auto it = _configMap.find(key);
     if (it != _configMap.end()) {
-        cache = it->second;
-        return cache.c_str();
+        return it->second;
     }
     LOG_W("Config '{}' not found", key);
-    return nullptr;
+    return empty;
 }
 
 } // namespace zws

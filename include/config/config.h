@@ -16,20 +16,20 @@ struct Config {
     std::string configPath;
 
   public:
-    static bool Init(std::string const& configPath);
+    static bool Init(const std::string& configPath);
 
     _ZENER_SHORT_FUNC static Config& getInstance() { return _instance; }
 
-    const char* GetConfig(const std::string& key);
+    const std::string& GetConfig(const std::string& key);
 
   private:
     static Config _instance;
 
-    static bool read(std::string const& filename);
+    static bool read(const std::string& filename);
 
     Config() : configPath(ZENER_CONFIG_FILEPATH) {}
 
-    Config(Config const&) = delete;
+    Config(const Config&) = delete;
     Config& operator=(Config const&) = delete;
 
     static std::unordered_map<std::string, std::string> _configMap;

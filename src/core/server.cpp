@@ -13,6 +13,7 @@
 #include <ctime>
 #include <fcntl.h>
 #include <functional>
+#include <iostream>
 #include <netinet/in.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
@@ -42,24 +43,21 @@ WebServer::WebServer(int port, int trigMode, int timeoutMS, bool OptLinger,
     // log
     Logger::Init();
 
-    // 段错误
-    if (0) {
-        // config
-        Config::Init("config.TOML");
-        // TODO
-        // 检查 log 是否初始化，如果没有，直接不打印 LOG
-        // 或者控制是否打印至文件
-        // TODO 修改 log 类，使其自动拼接，并且存储一个 path。不然 log.name
-        // 需要配置完整的路径
-        auto logPath = GET_CONFIG("log.path");
-        auto logName = GET_CONFIG("log.name");
+    // config
+    Config::Init("config.toml");
+    // TODO
+    // 检查 log 是否初始化，如果没有，直接不打印 LOG
+    // 或者控制是否打印至文件
+    // TODO 修改 log 类，使其自动拼接，并且存储一个 path。不然 log.name
+    // 需要配置完整的路径
+    auto logPath = GET_CONFIG("log.path");
+    auto logName = GET_CONFIG("log.name");
 
-        if (mkdir(logPath, 0777) != 0 && errno != EEXIST) {
-            LOG_E("Failed to create log directory: ");
-        }
-        if (!zws::Logger::WriteToFile(logName)) {
-            LOG_E("Failed to create log file: {}", logName);
-        }
+    if (mkdir(logPath.c_str(), 0777) != 0 && errno != EEXIST) {
+        LOG_E("Failed to create log directory: ");
+    }
+    if (!zws::Logger::WriteToFile(logName)) {
+        LOG_E("Failed to create log file: {}", logName);
     }
 
     if (mkdir("logs", 0777) != 0 && errno != EEXIST) {

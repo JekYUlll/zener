@@ -6,7 +6,7 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions("-O0 -g -ggdb -Wno-unused-variable")
 else()
     add_definitions(-Os -DNDEBUG)
@@ -18,8 +18,9 @@ include_directories(
 )
 
 add_definitions(-D__USE_SPDLOG)
+
 # V0 代表使用 webserver 11 原本实现
-add_definitions(-D__V0) 
+add_definitions(-D__V0)
 
 # 设置输出目录
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
@@ -48,4 +49,3 @@ target_link_libraries(Zener ${MYSQL_LIBRARIES})
 # find_package(MySQL REQUIRED)
 # include_directories(${MYSQL_INCLUDE_DIRS})
 # target_link_libraries(zener ${MYSQL_LIBRARIES})
-
