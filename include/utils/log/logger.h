@@ -1,8 +1,6 @@
 #ifndef ZENER_LOGGER_H
 #define ZENER_LOGGER_H
 
-#include "common.h"
-
 // TODO
 // 封装一个总的 logger 类，按编译选项设置是否使用 spdlog
 

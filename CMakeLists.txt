@@ -27,8 +27,20 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 # 添加子目录
-add_subdirectory(src)
+add_subdirectory(src) # 在src中收集了SERVER_SOURCES
+add_subdirectory(cmd)
 add_subdirectory(tests)
+
+# 主 server
+add_executable(Zener 
+    ${CMAKE_SOURCE_DIR}/cmd/server/main.cpp
+    ${SERVER_SOURCES}
+)
+
+add_executable(log_test 
+    ${CMAKE_SOURCE_DIR}/tests/log_test/main.cpp
+    ${SERVER_SOURCES}
+)
 
 # 查找 MYSQL
 # 使用 pkg-config 替代 CMake 配置

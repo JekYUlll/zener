@@ -20,13 +20,13 @@ void SqlConnector::Init(const char* host, unsigned int port, const char* user,
         MYSQL* sql = nullptr;
         sql = mysql_init(sql);
         if (!sql) {
-            LOG_E("MYSQL init error: {0} in {1}", __FUNCTION__, __FILE__);
+            LOG_E("MYSQL init error! {}", __FUNCTION__);
             assert(sql);
         }
         sql =
             mysql_real_connect(sql, host, user, pwd, dbName, port, nullptr, 0);
         if (!sql) {
-            LOG_E("MYSQL connect error: {0} in {1}", __FUNCTION__, __FILE__);
+            LOG_E("MYSQL connect error! {}", __FUNCTION__);
         }
         _connQue.push(sql);
     }

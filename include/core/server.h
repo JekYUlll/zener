@@ -68,6 +68,10 @@ class WebServer {
 };
 
 } // namespace v0
+
+std::unique_ptr<v0::WebServer>
+NewServerFromConfig(const std::string& configPath);
+
 } // namespace zws
 
 // class Server : public IRestful {

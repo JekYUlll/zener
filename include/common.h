@@ -4,10 +4,9 @@
 #include "utils/defer.h"
 #include "utils/free.hpp"
 #include "utils/hash.hpp"
+#include "utils/log/logger.h"
 
-// #define __USE_SPDLOG
-// #define USE_TOMLPLUSPLUS
-#define ZENER_CONFIG_FILEPATH "config/app.toml"
+#define ZENER_CONFIG_FILEPATH "config/config.toml"
 
 #ifdef __USE_STRING
 namespace zws {

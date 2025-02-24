@@ -23,7 +23,7 @@ Logger::Logger() {}
 
 static std::string sFirstInitFile;
 static int sFirstInitLine;
-static bool sInitialized = false;
+static bool sInitialized = false; // 是否初始化
 
 void Logger::Init() {
     std::lock_guard<std::mutex> lock(sLoggerMutex);

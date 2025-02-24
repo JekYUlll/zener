@@ -1,9 +1,12 @@
 #include "config/config.h"
-#include "utils/hash.hpp"
 #include "utils/log/logger.h"
+// #include "utils/hash.hpp"
+
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <fstream>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -14,10 +17,12 @@ Config Config::_instance;
 
 std::unordered_map<std::string, std::string> Config::_configMap;
 
+std::atomic<bool> Config::_initialized = false;
+
 bool Config::read(std::string const& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
-        LOG_E("Failed to open config file: {}", filename);
+        LOG_E("failed to open config file: {}", filename);
         return false;
     }
     std::string line;
@@ -66,10 +71,13 @@ bool Config::read(std::string const& filename) {
 }
 
 bool Config::Init(const std::string& configPath) {
-    auto& config = getInstance();
-    // std::map<std::string, std::string> configMap;
+    if (Initialized()) {
+        LOG_D("already initilized before");
+        return true;
+    }
+    auto& config = GetInstance();
     if (!read(configPath)) {
-        LOG_E("Failed to read config file");
+        LOG_E("failed to read config file: {}", configPath);
         return false;
     }
     // 如果需要在初始化的时候直接进行判断和赋值。暂时不需要
@@ -87,7 +95,6 @@ bool Config::Init(const std::string& configPath) {
     //         LOG_E("Error parsing config value for {}: {}", key, e.what());
     //     }
     // }
-
     // LOG_I("Configuration loaded:\n"
     //       "  Window: {}x{}\n"
     //       "  FPS: display={}, record={}, compare={}\n"
@@ -100,17 +107,51 @@ bool Config::Init(const std::string& configPath) {
     //       config.speedWeight, config.minSpeedRatio, config.maxSpeedRatio,
     //       config.minSpeedPenalty, config.dtwBandwidthRatio,
     //       config.similarityThreshold);
-
+    _initialized.store(true, std::memory_order_release);
     return true;
 }
 
-const std::string& Config::GetConfig(const std::string& key) {
+void Config::Print() {
+    if (!Initialized()) {
+        LOG_W("init before {}", __FUNCTION__);
+        return;
+    }
+    LOG_I("===================== config loaded =====================");
+    for (auto [key, val] : _configMap) {
+        LOG_I("{0} : {1}", key, val);
+    }
+    LOG_I("=========================================================");
+}
+
+const std::string& Config::GetConfig(const std::string& key) const {
     static const std::string empty;
+    if (!Initialized()) {
+        LOG_W("init before {}", __FUNCTION__);
+        return empty;
+    }
     auto it = _configMap.find(key);
     if (it != _configMap.end()) {
         return it->second;
     }
-    LOG_W("Config '{}' not found", key);
+    LOG_W("config '{}' not found", key);
+    return empty;
+}
+
+const std::string& Config::GetConfigSafe(const std::string& key) const {
+    static const std::string empty;
+    if (!Initialized()) {
+        LOG_W("init before {}", __FUNCTION__);
+        return empty;
+    }
+    // TODO 增加一个超时取消
+    {
+        std::lock_guard<std::mutex> locker(_mtx);
+        auto it = _configMap.find(key);
+        if (it != _configMap.end()) {
+            return it->second;
+        }
+        LOG_W("config '{}' not found", key);
+    }
     return empty;
 }
 

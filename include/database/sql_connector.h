@@ -9,11 +9,11 @@
 // 活跃连接集合：std::unordered_map<Connection*, std::chrono::time_point>
 // 超时管理：优先队列（std::priority_queue）
 
+// TODO 使用 boost 的无锁队列
 // 可以使用 boost::lockfree::queue
 // 使用基于数组的循环缓冲区（ring buffer）
 
 // #include "database/db_mysql.h"
-// #include "utils/safequeue.h"
 
 #include <condition_variable>
 #include <cstddef>
@@ -29,7 +29,6 @@ namespace db {
 static constexpr int SQL_CONN_SIZE = 8;
 
 class SqlConnector {
-
   public:
     static SqlConnector& GetInstance();
 
@@ -55,8 +54,9 @@ class SqlConnector {
 
     static int _maxConnSize; // 连接队列最大大小
     std::queue<MYSQL*> _connQue;
-    // boost::lockfree::queue<MYSQL*> que;
     int _useCount;
+
+    // boost::lockfree::queue<MYSQL*> que;
 
     mutable std::mutex _mtx;
     std::condition_variable _condition;
