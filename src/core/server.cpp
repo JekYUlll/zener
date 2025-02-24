@@ -37,7 +37,7 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     Logger::Init();
 
     // @config init
-    // Config::Init("config.toml"); // 在工厂函数里初始化 Config，此处不需要
+    // Config::Init("config.toml");
 
     char cwdBuff[256];
     if (!getcwd(cwdBuff, 256)) { // 接受两个参数：缓冲区 char *buf 和 缓冲区大小
@@ -65,18 +65,17 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     // TODO 修改 log 类，使其自动拼接，并且存储一个 dir。 log.name
     // 此处是手动拼接的
     // 需要配置完整的路径
-    const auto logDir = GET_CONFIG("log.dir"); // "logs"
-    // TODO 用日期作为log名字
-    const auto logName = GET_CONFIG("log.name");        // "test.log"
-    const std::string logPath = logDir + "/" + logName; // 相对路径
-    // const std::string fullLogPath = _cwd + "/" + logDir + "/" + logName;
-    if (mkdir(logDir.c_str(), 0777) != 0 && errno != EEXIST) {
-        LOG_E("Failed to create log directory: {}!",
-              logDir); // 创建文件夹没问题
+    const auto logDir = GET_CONFIG("log.dir");   // 使用 dir 而不是 path
+    const auto logName = GET_CONFIG("log.name"); // "test.log"
+    // 使用绝对路径，确保日志文件创建在正确的位置
+    const std::string logPath = _cwd + "/" + logDir + "/" + logName;
+    if (mkdir((_cwd + "/" + logDir).c_str(), 0777) != 0 && errno != EEXIST) {
+        LOG_E("Failed to create log directory: {}", _cwd + "/" + logDir);
+        return;
     }
-    if (!zws::Logger::WriteToFile(logPath)) {
-        LOG_E("Failed to create log file: {}!",
-              logPath); // 创建文件夹没问题，但是写不进去
+    if (!Logger::WriteToFile(logPath)) {
+        LOG_E("Failed to create log file: {}", logPath);
+        return;
     }
     // if (!zws::Logger::WriteToFile(fullLogPath)) {
     //     LOG_E("Failed to create log file: {}!", fullLogPath);
@@ -383,8 +382,11 @@ int Server::SetFdNonblock(const int fd) {
 } // namespace v0
 
 std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath) {
-    Config::Init(configPath);
-    Logger::Init();
+    if (!Config::Init(configPath)) {
+        LOG_E("Failed to initialize config from {}", configPath);
+        return nullptr;
+    }
+
     // TODO 更改 config 的接口，获取的时候通过不同函数直接转换为 int 或者 uint
     // strtol 是 C 语言标准库中的一个函数，用于将字符串转换为长整型（long
     // int）数值

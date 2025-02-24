@@ -3,7 +3,7 @@
 
 #include "spdlog/common.h"
 #include <atomic>
-#include <mutex>
+#include <string>
 
 namespace zws {
 
@@ -32,26 +32,18 @@ class Logger {
         log(loc, lvl, &buf);
     }
 
-    [[nodiscard]] static std::string GetLogFileName() {
-        if (!_bWriteToFile) {
-            return "";
-        }
-        return _logFileName;
-    }
-
-    [[nodiscard]] static bool IsWriteToFile() { return _bWriteToFile; }
-    [[nodiscard]] static bool Initialized() { return _sInitialized.load(std::memory_order_acquire); }
+    [[nodiscard]] static std::string GetLogFileName() { return _logFileName; }
+    [[nodiscard]] static bool Initialized() { return _sInitialized; }
 
   private:
     Logger() = default;
 
-    static void log(const spdlog::source_loc &loc, spdlog::level::level_enum lvl,
+    static void log(const spdlog::source_loc& loc,
+                    spdlog::level::level_enum lvl,
                     const spdlog::memory_buf_t* buffer);
 
     static Logger _instance;
-    static std::atomic<bool> _bWriteToFile;
     static std::string _logFileName;
-    static std::mutex _fileNameMtx;
     static std::atomic<bool> _sInitialized;
 };
 
