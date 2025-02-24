@@ -17,17 +17,17 @@ class Epoller {
     ~Epoller();
 
     // 向 epoll 事件表注册事件
-    bool AddFd(int fd, uint32_t events);
+    bool AddFd(int fd, uint32_t events) const;
     // 修改已经注册的fd的监听事件
-    bool ModFd(int fd, uint32_t events);
+    bool ModFd(int fd, uint32_t events) const;
     // 从epoll事件表中删除一个fd
-    bool DelFd(int fd);
+    bool DelFd(int fd) const;
     // 等待epoll上监听的fd产生事件，超时时间timeout，产生的事件需要使用GetEvents获得
     int Wait(int timeoutMs = -1);
     // 获取产生的事件的来源fd（应在wait之后调用）
-    int GetEventFd(size_t i) const;
+    [[nodiscard]] int GetEventFd(size_t i) const;
     // 获取产生的事件（应在wait之后调用）
-    uint32_t GetEvents(size_t i) const;
+    [[nodiscard]] uint32_t GetEvents(size_t i) const;
 
   private:
     bool _isET;                              // 是否开启ET模式

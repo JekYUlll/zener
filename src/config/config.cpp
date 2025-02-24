@@ -24,34 +24,31 @@ bool Config::read(std::string const& filename) {
     namespace fs = std::filesystem;
     // 检查文件是否存在
     if (!fs::exists(filename)) {
-        LOG_E("config file does not exist: {}", filename);
+        LOG_E("Config file does not exist: {}.", filename);
         return false;
     }
     // 莫名其妙 config.toml 没权限了导致失败，增加权限的判断和修改 --2025/02/24
-    auto perms = fs::status(filename).permissions();
-    if ((perms & fs::perms::owner_read) == fs::perms::none) {
-        LOG_W("config file lacks read permission, attempting to add...");
+    if (auto perms = fs::status(filename).permissions(); (perms & fs::perms::owner_read) == fs::perms::none) {
+        LOG_W("Config file {} lacks read permission, attempting to add...", filename);
         try {
-            fs::permissions(filename, fs::perms::owner_read,
+            permissions(filename, fs::perms::owner_read,
                             fs::perm_options::add);
         } catch (const fs::filesystem_error& e) {
-            LOG_E("failed to add read permission: {}", e.what());
+            LOG_E("Failed to add read permission: {}.", e.what());
             return false;
         }
     }
     std::ifstream file(filename);
     if (!file.is_open()) {
-        LOG_E("failed to open config file: {}", filename);
+        LOG_E("Failed to open config file: {}.", filename);
         return false;
     }
     std::string line;
     std::string currentSection;
     while (std::getline(file, line)) {
-        // 跳过空行和注释
-        if (line.empty() || line[0] == '#') {
+        if (line.empty() || line[0] == '#') { // 跳过空行和注释
             continue;
         }
-        // 去除首尾空格
         line.erase(0, line.find_first_not_of(" \t"));
         line.erase(line.find_last_not_of(" \t") + 1);
         if (line[0] == '[' && line[line.length() - 1] == ']') { // 处理TOML节
@@ -59,26 +56,27 @@ bool Config::read(std::string const& filename) {
             continue;
         }
         std::istringstream iss(line);
-        std::string key, value;
-        if (std::getline(iss, key, '=') && std::getline(iss, value)) {
-            // 去除首尾空格
+        if (std::string key, value; std::getline(iss, key, '=') && std::getline(iss, value)) {
             key.erase(0, key.find_first_not_of(" \t"));
             key.erase(key.find_last_not_of(" \t") + 1);
             value.erase(0, value.find_first_not_of(" \t"));
             value.erase(value.find_last_not_of(" \t") + 1);
-            // 如果在某个节中，添加节名作为前缀
-            if (!currentSection.empty()) {
-                key = currentSection + "." + key;
+            if (!currentSection.empty()) { // 如果在某个节中，添加节名作为前缀
+                /* 等价于：
+                    key = currentSection + "." + key; // 一点蚊子腿性能优化，减少临时对象
+                */
+                std::string originalKey(std::move(key));
+                key.reserve(currentSection.size() + 1 + originalKey.size());
+                key.append(currentSection);
+                key.append(".");
+                key.append(originalKey);
             }
-            // 移除注释
-            size_t commentPos = value.find('#');
-            if (commentPos != std::string::npos) {
+            if (size_t commentPos = value.find('#'); commentPos != std::string::npos) { // 移除注释
                 value = value.substr(0, commentPos);
                 value.erase(value.find_last_not_of(" \t") + 1);
             }
-            // 移除引号（如果存在）
             if (value.length() >= 2 && value.front() == '"' &&
-                value.back() == '"') {
+                value.back() == '"') { // 移除引号（如果存在）
                 value = value.substr(1, value.length() - 2);
             }
             _configMap[key] = value;
@@ -88,13 +86,11 @@ bool Config::read(std::string const& filename) {
 }
 
 bool Config::Init(const std::string& configPath) {
-    if (Initialized()) {
-        LOG_D("already initilized before.");
+    if (_initialized.load(std::memory_order_acquire)) {
         return true;
     }
-    auto& config = GetInstance();
     if (!read(configPath)) {
-        LOG_E("failed to read config file: {}", configPath);
+        LOG_E("Failed to read config file: {}.", configPath);
         return false;
     }
     // 如果需要在初始化的时候直接进行判断和赋值。暂时不需要
@@ -118,44 +114,42 @@ bool Config::Init(const std::string& configPath) {
 
 void Config::Print() {
     if (!Initialized()) {
-        LOG_W("init before {}", __FUNCTION__);
+        LOG_W("Should init before {}.", __FUNCTION__);
         return;
     }
-    LOG_I("===================== config loaded =====================");
+    LOG_I("===================== Config Loaded =====================");
     for (auto [key, val] : _configMap) {
         LOG_I("{0} : {1}", key, val);
     }
     LOG_I("=========================================================");
 }
 
-const std::string& Config::GetConfig(const std::string& key) const {
+const std::string& Config::GetConfig(const std::string& key) {
     static const std::string empty;
     if (!Initialized()) {
-        LOG_W("init before {}", __FUNCTION__);
+        LOG_W("Should init before {}", __FUNCTION__);
         return empty;
     }
-    auto it = _configMap.find(key);
-    if (it != _configMap.end()) {
+    if (const auto it = _configMap.find(key); it != _configMap.end()) {
         return it->second;
     }
-    LOG_W("config '{}' not found", key);
+    LOG_W("Config '{}' not found.", key);
     return empty;
 }
 
 const std::string& Config::GetConfigSafe(const std::string& key) const {
     static const std::string empty;
     if (!Initialized()) {
-        LOG_W("init before {}", __FUNCTION__);
+        LOG_W("Should init before {}.", __FUNCTION__);
         return empty;
     }
     // TODO 增加一个超时取消
     {
-        std::lock_guard<std::mutex> locker(_mtx);
-        auto it = _configMap.find(key);
-        if (it != _configMap.end()) {
+        std::lock_guard locker(_mtx);
+        if (const auto it = _configMap.find(key); it != _configMap.end()) {
             return it->second;
         }
-        LOG_W("config '{}' not found", key);
+        LOG_W("Config key '{}' not found.", key);
     }
     return empty;
 }

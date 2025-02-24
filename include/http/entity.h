@@ -1,6 +1,8 @@
 #ifndef ZENER_HTTP_ENTITY
 #define ZENER_HTTP_ENTITY
 
+// TODO 优化 http 解析
+
 #include <vector>
 
 namespace zws {

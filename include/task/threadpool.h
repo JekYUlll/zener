@@ -29,7 +29,7 @@ class ThreadPool {
       public:
         ThreadWorker(ThreadPool* pool, const int id) : _pool(pool), _id(id) {}
 
-        void operator()() {
+        void operator()() const {
             std::function<void()> func;
             bool dequeued; // 是否正在取出队列中元素
             while (!_pool->_shutdown) {
@@ -62,8 +62,8 @@ class ThreadPool {
     std::condition_variable _con; // 线程环境锁，可以让线程处于休眠或者唤醒状态
 
   public:
-    ThreadPool(const int n_threads = THREAD_NUM)
-        : _threads(std::vector<std::thread>(n_threads)), _shutdown(false) {}
+    explicit ThreadPool(const int n_threads = THREAD_NUM)
+        : _shutdown(false), _threads(std::vector<std::thread>(n_threads)) {}
 
     ThreadPool(ThreadPool const&) = delete;
 
@@ -84,10 +84,9 @@ class ThreadPool {
     void shutdown() {
         _shutdown = true;
         _con.notify_all(); // 通知，唤醒所有工作线程
-        for (int i = 0; i < _threads.size(); ++i) {
-            if (_threads.at(i).joinable()) // 判断线程是否在等待
-            {
-                _threads.at(i).join(); // 将线程加入到等待队列
+        for (auto & t : _threads) {
+            if (t.joinable()) { // 判断线程是否在等待
+                t.join(); // 将线程加入到等待队列
             }
         }
     }

@@ -14,20 +14,20 @@ namespace zws {
 class MLogger {
   public:
     ~MLogger() = default;
-
-    static void Init();
-
-    inline static MLogger& GetInstance() { return instance; }
-
-  private:
-    MLogger() = default;
     MLogger(const MLogger&) = delete;
     MLogger(MLogger&&) = delete;
     MLogger& operator=(const MLogger&) = delete;
 
+    static void Init();
+
+    static MLogger& GetInstance() { return instance; }
+
+  private:
+    MLogger() = default;
+
     static MLogger instance;
 
-    const char* _path;
+    const char* _path{};
     std::mutex _mtx;
 };
 

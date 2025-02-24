@@ -10,12 +10,12 @@
 #include "http/response.h"
 
 #include <arpa/inet.h> // sockaddr_in
-#include <stdlib.h>    // atoi()
+#include <cstdlib>    // atoi()
 #include <sys/types.h>
 #include <sys/uio.h> // readv/writev
 
-namespace zws {
-namespace http {
+
+namespace zws::http {
 
 // TODO
 // 现在的 Conn 存储 request 和 response , 感觉有点占空间
@@ -37,7 +37,7 @@ class Conn {
     bool process();
 
     // 需要写出的字节数
-    _ZENER_SHORT_FUNC int ToWriteBytes() {
+    _ZENER_SHORT_FUNC int ToWriteBytes() const {
         return _iov[0].iov_len + _iov[1].iov_len;
     }
 
@@ -56,7 +56,7 @@ class Conn {
     }
 
     static bool isET;          // 是否为边缘触发
-    static const char* srcDir; // 请求文件对应的根目录
+    static const char* staticDir; // 请求文件对应的根目录
     static std::atomic<int> userCount;
 
   private:
@@ -71,11 +71,11 @@ class Conn {
     Buffer _readBuff;  // 读缓冲区
     Buffer _writeBuff; // 写缓冲区
 
-    HttpRequest _request;
-    HttpResponse _response;
+    Request _request;
+    Response _response;
 };
 
-} // namespace http
-} // namespace zws
+} // namespace zws::http
+
 
 #endif // !ZENER_HTTP_CONN_H

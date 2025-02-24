@@ -6,28 +6,28 @@
 #include <mysql/mysql.h>
 #include <regex>
 
-namespace zws {
-namespace http {
+
+namespace zws::http {
 
 using namespace std;
 
-const unordered_set<string> HttpRequest::DEFAULT_HTML{
+const unordered_set<string> Request::DEFAULT_HTML{
     "/index", "/register", "/login", "/welcome", "/video", "/picture",
 };
 
-const unordered_map<string, int> HttpRequest::DEFAULT_HTML_TAG{
+const unordered_map<string, int> Request::DEFAULT_HTML_TAG{
     {"/register.html", 0},
     {"/login.html", 1},
 };
 
-void HttpRequest::Init() {
+void Request::Init() {
     method_ = path_ = version_ = body_ = "";
     state_ = REQUEST_LINE;
     header_.clear();
     post_.clear();
 }
 
-bool HttpRequest::IsKeepAlive() const {
+bool Request::IsKeepAlive() const {
     if (header_.count("Connection") == 1) {
         return header_.find("Connection")->second == "keep-alive" &&
                version_ == "1.1";
@@ -35,8 +35,8 @@ bool HttpRequest::IsKeepAlive() const {
     return false;
 }
 
-bool HttpRequest::parse(Buffer& buff) {
-    const char CRLF[] = "\r\n";
+bool Request::parse(Buffer& buff) {
+    constexpr char CRLF[] = "\r\n";
     if (buff.ReadableBytes() <= 0) {
         return false;
     }
@@ -74,7 +74,7 @@ bool HttpRequest::parse(Buffer& buff) {
     return true;
 }
 
-void HttpRequest::ParsePath_() {
+void Request::ParsePath_() {
     if (path_ == "/") {
         path_ = "/index.html";
     } else {
@@ -87,11 +87,10 @@ void HttpRequest::ParsePath_() {
     }
 }
 
-bool HttpRequest::ParseRequestLine_(const string& line) {
+bool Request::ParseRequestLine_(const string& line) {
     // 正则
-    regex patten("^([^ ]*) ([^ ]*) HTTP/([^ ]*)$");
-    smatch subMatch;
-    if (regex_match(line, subMatch, patten)) {
+    const regex patten("^([^ ]*) ([^ ]*) HTTP/([^ ]*)$");
+    if (smatch subMatch; regex_match(line, subMatch, patten)) {
         method_ = subMatch[1];
         path_ = subMatch[2];
         version_ = subMatch[3];
@@ -102,7 +101,7 @@ bool HttpRequest::ParseRequestLine_(const string& line) {
     return false;
 }
 
-void HttpRequest::ParseHeader_(const string& line) {
+void Request::ParseHeader_(const string& line) {
     regex patten("^([^:]*): ?(.*)$");
     smatch subMatch;
     if (regex_match(line, subMatch, patten)) {
@@ -112,14 +111,14 @@ void HttpRequest::ParseHeader_(const string& line) {
     }
 }
 
-void HttpRequest::ParseBody_(const string& line) {
+void Request::ParseBody_(const string& line) {
     body_ = line;
     ParsePost_();
     state_ = FINISH;
     LOG_D("Body:{0}, len:{1}", line.c_str(), line.size());
 }
 
-int HttpRequest::ConverHex(char ch) {
+int Request::ConverHex(char ch) {
     if (ch >= 'A' && ch <= 'F')
         return ch - 'A' + 10;
     if (ch >= 'a' && ch <= 'f')
@@ -127,7 +126,7 @@ int HttpRequest::ConverHex(char ch) {
     return ch;
 }
 
-void HttpRequest::ParsePost_() {
+void Request::ParsePost_() {
     if (method_ == "POST" &&
         header_["Content-Type"] == "application/x-www-form-urlencoded") {
         ParseFromUrlencoded_();
@@ -146,8 +145,8 @@ void HttpRequest::ParsePost_() {
     }
 }
 
-void HttpRequest::ParseFromUrlencoded_() {
-    if (body_.size() == 0) {
+void Request::ParseFromUrlencoded_() {
+    if (body_.empty()) {
         return;
     }
 
@@ -189,7 +188,7 @@ void HttpRequest::ParseFromUrlencoded_() {
     }
 }
 
-bool HttpRequest::UserVerify(const string& name, const string& pwd,
+bool Request::UserVerify(const string& name, const string& pwd,
                              bool isLogin) {
     if (name == "" || pwd == "") {
         return false;
@@ -260,5 +259,4 @@ bool HttpRequest::UserVerify(const string& name, const string& pwd,
     return flag;
 }
 
-} // namespace http
-} // namespace zws
+} // namespace zws::http

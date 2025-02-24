@@ -33,7 +33,7 @@ namespace http {
 //     PATCH,
 // };
 
-class HttpRequest : std::enable_shared_from_this<HttpRequest> {
+class Request : std::enable_shared_from_this<Request> {
   public:
     enum PARSE_STATE {
         REQUEST_LINE,
@@ -53,8 +53,8 @@ class HttpRequest : std::enable_shared_from_this<HttpRequest> {
         CLOSED_CONNECTION,
     };
 
-    HttpRequest() { Init(); }
-    ~HttpRequest() = default;
+    Request() { Init(); }
+    ~Request() = default;
 
     void Init();
     bool parse(Buffer& buff);

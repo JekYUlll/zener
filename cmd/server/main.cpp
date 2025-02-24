@@ -1,23 +1,20 @@
 // #include "core/server.h"
 #include "config/config.h"
-#include "core/init.h"
 #include "core/server.h"
 #include "utils/log/logger.h"
 
 #include <cassert>
-#include <cstdio>
 #include <cstdlib>
-#include <sys/stat.h>
+#include <iostream>
 
-int main(void) {
+int main() {
 
-    zws::Logger::Init();
+    const auto server = zws::NewServerFromConfig("config.toml");
+    zws::ServerGuard guard(server.get());
+    // assert(server);
+    // server->Start();
 
-    auto server = zws::NewServerFromConfig("config.toml");
-
-    zws::Config::Print();
-
-    server->Start();
+    std::cin.get();
 
     return EXIT_SUCCESS;
 }

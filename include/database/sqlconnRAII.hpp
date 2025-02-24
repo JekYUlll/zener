@@ -1,13 +1,14 @@
 #ifndef ZENER_CONN_RAII_HPP
 #define ZENER_CONN_RAII_HPP
 
+// RAII 似乎没什么卵用
+
 #include "database/sql_connector.h"
 
 #include <cassert>
 #include <mysql/mysql.h>
 
-namespace zws {
-namespace db {
+namespace zws::db {
 
 class SqlConnRAII {
 
@@ -30,7 +31,7 @@ class SqlConnRAII {
     SqlConnector* _connPool;
 };
 
-} // namespace db
-} // namespace zws
+} // namespace zws::db
+
 
 #endif // !ZENER_CONN_RAII_HPP

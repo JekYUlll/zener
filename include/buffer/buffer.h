@@ -84,7 +84,7 @@ class Buffer {
     void RetrieveAll();
 
     std::string RetrieveAllToString();
-    std::string ToString() const;
+    [[nodiscard]] std::string ToString() const;
 
     inline void HasWritten(size_t len) { _writePos += len; }
 

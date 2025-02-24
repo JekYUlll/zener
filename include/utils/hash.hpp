@@ -11,7 +11,7 @@ constexpr uint32_t hash_str(char const* str, std::size_t n) {
     return n == 0 ? 5381 : (hash_str(str, n - 1) * 33) ^ str[n - 1];
 }
 
-constexpr uint32_t operator"" _hash(char const* str, std::size_t n) {
+constexpr uint32_t operator"" _hash(char const* str, const std::size_t n) {
     return hash_str(str, n);
 }
 

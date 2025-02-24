@@ -1,6 +1,8 @@
 #ifndef ZENER_HTTP_HEADER_H
 #define ZENER_HTTP_HEADER_H
 
+// TODO 优化 http 解析
+
 namespace zws {
 namespace http {
 

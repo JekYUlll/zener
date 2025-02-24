@@ -21,6 +21,9 @@ struct Config {
     std::string configPath;
 
   public:
+    Config(const Config&) = delete;
+    Config& operator=(Config const&) = delete;
+
     static bool Init(const std::string& configPath);
 
     _ZENER_SHORT_FUNC static bool Initialized() {
@@ -31,14 +34,13 @@ struct Config {
 
     static void Print();
 
-    const std::string& GetConfig(const std::string& key) const;
+    static const std::string& GetConfig(const std::string& key) ;
     // 加锁的版本，多线程用
     const std::string& GetConfigSafe(const std::string& key) const;
 
   private:
     Config() : configPath(ZENER_CONFIG_FILEPATH) {}
-    Config(const Config&) = delete;
-    Config& operator=(Config const&) = delete;
+
     static Config _instance;
 
     mutable std::mutex _mtx;

@@ -3,6 +3,7 @@ bin/
 logs/
 cmake-build-debug/
 cmake-build-release/
+cmake-build-default/
 .idea/
 .cache/
 ._11origin/

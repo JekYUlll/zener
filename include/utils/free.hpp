@@ -4,7 +4,7 @@
 namespace zws {
 
 template <typename Interface>
-inline void SafeRelease(Interface*& pInterfaceToRelease) {
+void SafeRelease(Interface*& pInterfaceToRelease) {
     if (pInterfaceToRelease) {
         delete pInterfaceToRelease;
         pInterfaceToRelease = nullptr;

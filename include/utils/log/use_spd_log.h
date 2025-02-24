@@ -9,16 +9,22 @@ namespace zws {
 
 class Logger {
   public:
+    static Logger* GetLoggerInstance() { return &_instance; }
+
     Logger(const Logger&) = delete;
+    Logger(Logger&&) = delete;
     Logger& operator=(const Logger&) = delete;
+    Logger& operator=(Logger&&) = delete;
+    ~Logger();
 
     static void Init();
-    static bool WriteToFile(std::string_view sFileName);
-
-    static Logger* GetLoggerInstance() { return &sLoggerInstance; }
+    static bool WriteToFile(std::string_view fileName);
+    static void SetLogFilePath(std::string_view fileName);
+    static void Flush();
+    static void Shutdown();
 
     template <typename... Args>
-    void Log(spdlog::source_loc loc, spdlog::level::level_enum lvl,
+    void Log(const spdlog::source_loc loc, const spdlog::level::level_enum lvl,
              spdlog::format_string_t<Args...> fmt, Args&&... args) {
         spdlog::memory_buf_t buf;
         fmt::vformat_to(fmt::appender(buf), fmt,
@@ -27,26 +33,26 @@ class Logger {
     }
 
     [[nodiscard]] static std::string GetLogFileName() {
-        if (_bWriteToFile) {
-            return _sLogFileName;
+        if (!_bWriteToFile) {
+            return "";
         }
-        return "";
+        return _logFileName;
     }
 
     [[nodiscard]] static bool IsWriteToFile() { return _bWriteToFile; }
-
-    static void SetLogFilePath(std::string_view sNewFileName);
+    [[nodiscard]] static bool Initialized() { return _sInitialized.load(std::memory_order_acquire); }
 
   private:
-    Logger();
+    Logger() = default;
 
-    static Logger sLoggerInstance;
+    static void log(const spdlog::source_loc &loc, spdlog::level::level_enum lvl,
+                    const spdlog::memory_buf_t* buffer);
+
+    static Logger _instance;
     static std::atomic<bool> _bWriteToFile;
-    static std::string _sLogFileName;
-    static std::mutex _fileNameMutex;
-
-    void log(spdlog::source_loc loc, spdlog::level::level_enum lvl,
-             const spdlog::memory_buf_t* buffer);
+    static std::string _logFileName;
+    static std::mutex _fileNameMtx;
+    static std::atomic<bool> _sInitialized;
 };
 
 #define ZENER_LOG_LOGGER_CALL(adlog, level, ...)                               \

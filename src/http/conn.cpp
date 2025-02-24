@@ -1,24 +1,24 @@
 #include "http/conn.h"
 #include "utils/log/logger.h"
+
 #include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/uio.h>
 #include <unistd.h>
 
-namespace zws {
-namespace http {
 
-const char* Conn::srcDir;
+namespace zws::http {
+
+const char* Conn::staticDir;
 std::atomic<int> Conn::userCount;
 bool Conn::isET;
 
-Conn::Conn() : _fd(-1), _addr({0}), _isClose(true), _iovCnt(-1) {
+Conn::Conn() : _fd(-1), _addr({0}), _isClose(true), _iovCnt(-1), _iov{} {
     // 将 _iovCnt 初始化为-1 不知道是否合适
 }
 
@@ -26,7 +26,7 @@ Conn::~Conn() { Close(); }
 
 void Conn::init(int fd, const sockaddr_in& addr) {
     assert(fd > 0);
-    userCount++;
+    ++userCount;
     _addr = addr;
     _fd = fd;
     _writeBuff.RetrieveAll();
@@ -40,7 +40,7 @@ void Conn::Close() {
     _response.UnmapFile();
     if (!_isClose) {
         _isClose = true;
-        userCount--;
+        --userCount;
         close(_fd);
         LOG_I("Client {0} {1} quit, userCount: {2}", _fd, GetIP(), GetPort(),
               userCount.load());
@@ -70,14 +70,14 @@ ssize_t Conn::write(int* saveErrno) {
             break; // 传输结束
         } else if (static_cast<size_t>(len) > _iov[0].iov_len) {
             _iov[1].iov_base =
-                (uint8_t*)_iov[1].iov_base + (len - _iov[0].iov_len);
+                static_cast<uint8_t *>(_iov[1].iov_base) + (len - _iov[0].iov_len);
             _iov[1].iov_len -= (len - _iov[0].iov_len);
             if (_iov[0].iov_len) {
                 _writeBuff.RetrieveAll();
                 _iov[0].iov_len = 0;
             }
         } else {
-            _iov[0].iov_base = (uint8_t*)_iov[0].iov_base + len;
+            _iov[0].iov_base = static_cast<uint8_t *>(_iov[0].iov_base) + len;
             _iov[0].iov_len -= len;
             _writeBuff.RetrieveAll();
         }
@@ -91,9 +91,9 @@ bool Conn::process() {
         return false;
     } else if (_request.parse(_readBuff)) {
         LOG_D("{}", _request.path().c_str());
-        _response.Init(srcDir, _request.path(), _request.IsKeepAlive(), 200);
+        _response.Init(staticDir, _request.path(), _request.IsKeepAlive(), 200);
     } else {
-        _response.Init(srcDir, _request.path(), false, 400);
+        _response.Init(staticDir, _request.path(), false, 400);
     }
     _response.MakeResponse(_writeBuff);
     // 响应头
@@ -112,5 +112,4 @@ bool Conn::process() {
     return true;
 }
 
-} // namespace http
-} // namespace zws
+} // namespace zws::http

@@ -3,8 +3,7 @@
 
 #include <cassert>
 
-namespace zws {
-namespace db {
+namespace zws::db {
 
 int SqlConnector::_maxConnSize;
 
@@ -13,8 +12,8 @@ SqlConnector& SqlConnector::GetInstance() {
     return instance;
 }
 
-void SqlConnector::Init(const char* host, unsigned int port, const char* user,
-                        const char* pwd, const char* dbName, int size) {
+void SqlConnector::Init(const char* host, const unsigned int port, const char* user,
+                        const char* pwd, const char* dbName, const int size) {
     assert(size > 0);
     for (int i = 0; i < size; i++) {
         MYSQL* sql = nullptr;
@@ -61,7 +60,7 @@ void SqlConnector::Close() {
     {
         std::lock_guard<std::mutex> locker(_mtx);
         while (!_connQue.empty()) {
-            auto sql = _connQue.front();
+            const auto sql = _connQue.front();
             _connQue.pop();
             mysql_close(sql);
         }
@@ -69,10 +68,9 @@ void SqlConnector::Close() {
     }
 }
 
-size_t SqlConnector::GetFreeConnCount() {
+size_t SqlConnector::GetFreeConnCount() const {
     std::lock_guard<std::mutex> locker(_mtx);
     return _connQue.size();
 }
 
-} // namespace db
-} // namespace zws
+} // namespace zws::db

@@ -7,44 +7,45 @@
 #include "task/timer/heaptimer.h"
 
 #include <cstdint>
-#include <cstdlib>
 #include <memory>
 #include <netinet/in.h>
-#include <sys/stat.h>
 #include <unordered_map>
 
 namespace zws {
 namespace v0 {
 
-class WebServer {
+class Server {
   public:
-    WebServer(int port, int trigMode, int timeoutMS, bool OptLinger,
+    Server(int port, int trigMode, int timeoutMS, bool optLinger,
               int sqlPort, const char* sqlUser, const char* sqlPwd,
               const char* dbName, int connPoolNum, int threadNum, bool openLog,
               int logLevel, int logQueSize);
 
-    ~WebServer();
+    ~Server();
 
     void Start();
+    void Stop(); // 普通退出，非优雅
+    // TODO 实现优雅退出 Shutdown
+    // TODO 实现定时退出
 
   private:
     bool initSocket();
     void initEventMode(int trigMode);
-    void addClient(int fd, sockaddr_in addr);
+    void addClient(int fd, const sockaddr_in& addr);
 
     void dealListen();
-    void dealRead(http::Conn* client);
-    void dealWrite(http::Conn* client);
+    void dealRead(http::Conn* client) const;
+    void dealWrite(http::Conn* client) const;
 
-    void sendError(int fd, const char* info);
-    void extentTime(http::Conn* client);
-    void closeConn(http::Conn* client);
+    static void sendError(int fd, const char* info);
+    void extentTime(http::Conn* client) const;
+    void closeConn(http::Conn* client) const;
 
-    void onRead(http::Conn* client);
-    void onWrite(http::Conn* client);
-    void onProcess(http::Conn* client);
+    void onRead(http::Conn* client) const;
+    void onWrite(http::Conn* client) const;
+    void onProcess(http::Conn* client) const;
 
-    static const int MAX_FD = 65535;
+    static constexpr int MAX_FD = 65535;
 
     static int SetFdNonblock(int fd);
 
@@ -52,15 +53,16 @@ class WebServer {
     bool _openLinger;
     int _timeoutMS;
     bool _isClose;
-    int _listenFd;
-    char* _srcDir;
+    int _listenFd{};
+    std::string _cwd{}; // 工作目录
+    std::string _staticDir{}; // 静态资源目录
 
-    uint32_t _listenEvent;
-    uint32_t _connEvent;
+    uint32_t _listenEvent{};
+    uint32_t _connEvent{};
 
-    std::unique_ptr<v0::HeapTimer> _timer;
+    std::unique_ptr<HeapTimer> _timer;
 
-    std::unique_ptr<v0::ThreadPool> _threadpool;
+    std::unique_ptr<ThreadPool> _threadpool;
 
     std::unique_ptr<Epoller> _epoller;
 
@@ -69,8 +71,24 @@ class WebServer {
 
 } // namespace v0
 
-std::unique_ptr<v0::WebServer>
+std::unique_ptr<v0::Server>
 NewServerFromConfig(const std::string& configPath);
+
+class ServerGuard {
+  public:
+     explicit ServerGuard(v0::Server* srv) : _srv(srv) {
+        _thread = std::thread([this]{ _srv->Start(); });
+     }
+
+     ~ServerGuard() {
+        _srv->Stop();
+        if(_thread.joinable()) _thread.join();
+        Logger::Shutdown(); // 确保日志最后关闭[2](@ref)
+     }
+  private:
+     v0::Server* _srv;
+     std::thread _thread;
+};
 
 } // namespace zws
 

@@ -23,8 +23,7 @@
 // #include <semaphore.h>
 // #include <boost/lockfree/queue.hpp>
 
-namespace zws {
-namespace db {
+namespace zws::db {
 
 static constexpr int SQL_CONN_SIZE = 8;
 
@@ -32,6 +31,8 @@ class SqlConnector {
   public:
     static SqlConnector& GetInstance();
 
+    SqlConnector(const SqlConnector& other) = delete;
+    SqlConnector& operator=(const SqlConnector& rhs) = delete;
     ~SqlConnector() { Close(); }
 
     void Init(const char* host, unsigned int port, const char* user,
@@ -43,18 +44,17 @@ class SqlConnector {
 
     void FreeConn(MYSQL* sql); // 释放连接，归还池中
 
-    size_t GetFreeConnCount();
+    size_t GetFreeConnCount() const;
 
-    int GetPoolSize() { return _maxConnSize; }
+    static int GetPoolSize() { return _maxConnSize; }
 
   private:
     SqlConnector() = default;
-    SqlConnector(const SqlConnector& other) = delete;
-    SqlConnector& operator=(const SqlConnector& rhs) = delete;
+
 
     static int _maxConnSize; // 连接队列最大大小
     std::queue<MYSQL*> _connQue;
-    int _useCount;
+    int _useCount{};
 
     // boost::lockfree::queue<MYSQL*> que;
 
@@ -62,7 +62,7 @@ class SqlConnector {
     std::condition_variable _condition;
 };
 
-} // namespace db
-} // namespace zws
+} // namespace zws::db
+
 
 #endif // !ZENER_SQL_CONNECT_POOL_H

@@ -1,5 +1,3 @@
-// #include "core/server.h"
-#include "core/init.h"
 #include "utils/log/logger.h"
 
 #include <cstdlib>
@@ -7,9 +5,9 @@
 #include <sys/stat.h>
 #include <thread>
 
-static const char* log_path = "logs";
+static auto log_path = "logs";
 
-int main(void) {
+int main() {
 
     zws::Logger::Init();
 
@@ -17,10 +15,6 @@ int main(void) {
         std::cerr << "Failed to create log directory" << std::endl;
         return EXIT_FAILURE;
     }
-
-    LOG_I("Hardware Concurrency: {0}, {1}",
-          static_cast<size_t>(std::thread::hardware_concurrency()),
-          __FUNCTION__);
 
     if (!zws::Logger::WriteToFile("logs/test.log")) {
         std::cerr << "Failed to create log file" << std::endl;
@@ -40,6 +34,11 @@ int main(void) {
     LOG_I("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
     LOG_W("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
     LOG_E("Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
+
+    // while(true) {
+    //     LOG_D("-----Log test: {0}, {1}, {3}", __FUNCTION__, 1, 0.14f, true);
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    // }
 
     return EXIT_SUCCESS;
 }

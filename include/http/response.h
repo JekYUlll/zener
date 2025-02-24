@@ -6,39 +6,39 @@
 #include <string>
 #include <unordered_map>
 
-namespace zws {
-namespace http {
 
-class HttpResponse {
+namespace zws::http {
+
+class Response {
   public:
-    HttpResponse();
-    ~HttpResponse();
+    Response();
+    ~Response();
 
-    void Init(const std::string& srcDir, std::string& path,
+    void Init(const std::string& srcDir, const std::string& path,
               bool isKeepAlive = false, int code = -1);
     void MakeResponse(Buffer& buff);
     void UnmapFile();
-    char* File();
-    size_t FileLen() const;
-    void ErrorContent(Buffer& buff, std::string message);
-    int Code() const { return code_; }
+    void ErrorContent(Buffer& buff, const std::string& message) const;
+
+    [[nodiscard]] char* File() const;
+    [[nodiscard]] size_t FileLen() const;
+    [[nodiscard]] int Code() const { return _code; }
 
   private:
-    void AddStateLine_(Buffer& buff);
-    void AddHeader_(Buffer& buff);
-    void AddContent_(Buffer& buff);
+    void addStateLine(Buffer& buff);
+    void addHeader(Buffer& buff) const;
+    void addContent(Buffer& buff);
 
-    void ErrorHtml_();
-    std::string GetFileType_();
+    void errorHtml();
 
-    int code_;
-    bool isKeepAlive_;
+    [[nodiscard]] std::string getFileType() const;
 
-    std::string path_;
-    std::string srcDir_;
-
-    char* mmFile_;
-    struct stat mmFileStat_;
+    int _code;
+    bool _isKeepAlive;
+    std::string _path;
+    std::string _srcDir;
+    char* _file;
+    struct stat _fileStat{};
 
     static const std::unordered_map<std::string, std::string> SUFFIX_TYPE;
     static const std::unordered_map<int, std::string> CODE_STATUS;
@@ -70,7 +70,7 @@ class HttpResponse {
 //     StatusCode code;
 // };
 
-} // namespace http
-} // namespace zws
+} // namespace zws::http
+
 
 #endif // !ZENER_HTTP_RESPONSE_H

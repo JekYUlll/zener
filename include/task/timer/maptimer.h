@@ -18,7 +18,7 @@ class Timer {
 
   public:
     Timer();
-    Timer(int repeat);
+    explicit Timer(int repeat);
     ~Timer();
 
     template <typename F, typename... Args>
@@ -43,11 +43,13 @@ void Timer::Callback(int milliseconds, F&& f, Args&&... args) {
 
 class TimerManager {
   public:
-    TimerManager& GetInstance() {
+    static TimerManager& GetInstance() {
         static TimerManager instance;
         return instance;
     }
 
+    TimerManager(const TimerManager&) = delete;
+    TimerManager& operator=(TimerManager&) = delete;
     ~TimerManager() = default;
 
     // 注册 无限重复版本
@@ -66,12 +68,10 @@ class TimerManager {
 
   private:
     TimerManager() = default;
-    TimerManager(const TimerManager&) = delete;
-    TimerManager& operator=(TimerManager&) = delete;
-
+    
     std::multimap<int64_t, Timer> _timers;
 
-    bool _bClosed; //*
+    bool _bClosed{}; //*
 };
 
 template <typename F, typename... Args>

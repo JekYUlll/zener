@@ -16,10 +16,8 @@
 #include <cstring>
 #include <ctime>
 #include <fcntl.h>
-#include <functional>
 #include <memory>
 #include <netinet/in.h>
-#include <string_view>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -27,10 +25,10 @@
 namespace zws {
 namespace v0 {
 
-WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
-                     int sqlPort, const char* sqlUser, const char* sqlPwd,
-                     const char* dbName, int connPoolNum, int threadNum,
-                     bool openLog, int logLevel, int logQueSize)
+Server::Server(int port, const int trigMode, const int timeoutMS,
+               const bool optLinger, const int sqlPort, const char* sqlUser,
+               const char* sqlPwd, const char* dbName, int connPoolNum,
+               int threadNum, bool openLog, int logLevel, int logQueSize)
     : _port(port), _openLinger(optLinger), _timeoutMS(timeoutMS),
       _isClose(false), _timer(new HeapTimer()),
       _threadpool(new ThreadPool(threadNum)), _epoller(new Epoller()) {
@@ -39,46 +37,50 @@ WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
     Logger::Init();
 
     // @config init
-    Config::Init("config.toml");
+    // Config::Init("config.toml"); // 在工厂函数里初始化 Config，此处不需要
 
-    // 接受两个参数：缓冲区 char *buf 和 缓冲区大小
-    _srcDir = getcwd(nullptr, 256);
-    assert(_srcDir);
-    strncat(_srcDir, "/static/", 16);
-    http::Conn::userCount.store(0, std::memory_order_acquire);
-    http::Conn::srcDir = _srcDir;
+    char cwdBuff[256];
+    if (!getcwd(cwdBuff, 256)) { // 接受两个参数：缓冲区 char *buf 和 缓冲区大小
+        LOG_E("Failed to get current working directory : {}", strerror(errno));
+    }
+    assert(cwdBuff);
+    _cwd = std::string(cwdBuff);
+    // strncat(_srcDir, "/static/", 16); // C 风格太阴间，都改成 std::string
+    _staticDir = _cwd + "/static";
+    http::Conn::userCount.store(0);
+    http::Conn::staticDir = _staticDir.c_str(); // 似乎不太安全？不过 _staticDir
+                                                // 之后不会修改了，理论上没问题
 
     db::SqlConnector::GetInstance().Init("localhost", sqlPort, sqlUser, dbName,
                                          dbName, connPoolNum);
 
     initEventMode(trigMode);
-    // 此处出错。实际原因是： server.cpp:291  - port: 316 is not valid!
+
     if (!initSocket()) {
         _isClose = true;
     }
-
     // TODO
     // 检查 log 是否初始化，如果没有，直接不打印 LOG
     // 或者控制是否打印至文件
-    // TODO 修改 log 类，使其自动拼接，并且存储一个 path。不然 log.name
+    // TODO 修改 log 类，使其自动拼接，并且存储一个 dir。 log.name
+    // 此处是手动拼接的
     // 需要配置完整的路径
-    auto logPath = GET_CONFIG("log.path");
-    auto logName = GET_CONFIG("log.name");
-
-    if (mkdir(logPath.c_str(), 0777) != 0 && errno != EEXIST) {
-        LOG_E("Failed to create log directory: {}", logPath);
+    const auto logDir = GET_CONFIG("log.dir"); // "logs"
+    // TODO 用日期作为log名字
+    const auto logName = GET_CONFIG("log.name");        // "test.log"
+    const std::string logPath = logDir + "/" + logName; // 相对路径
+    // const std::string fullLogPath = _cwd + "/" + logDir + "/" + logName;
+    if (mkdir(logDir.c_str(), 0777) != 0 && errno != EEXIST) {
+        LOG_E("Failed to create log directory: {}!",
+              logDir); // 创建文件夹没问题
     }
-    if (!zws::Logger::WriteToFile(logName)) {
-        LOG_E("Failed to create log file: {}", logName);
+    if (!zws::Logger::WriteToFile(logPath)) {
+        LOG_E("Failed to create log file: {}!",
+              logPath); // 创建文件夹没问题，但是写不进去
     }
-
-    if (mkdir("logs", 0777) != 0 && errno != EEXIST) {
-        LOG_E("Failed to create log directory: \"logs\"");
-    }
-    // TODO 此处手动控制的日志路径，没有真正使用配置文件
-    if (!zws::Logger::WriteToFile("logs/test3.log")) {
-        LOG_E("Failed to create log file: {}", "logs/test3.log");
-    }
+    // if (!zws::Logger::WriteToFile(fullLogPath)) {
+    //     LOG_E("Failed to create log file: {}!", fullLogPath);
+    // }
 
     // init info
     LOG_I("=====================Server Init=====================");
@@ -87,21 +89,22 @@ WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
           (_listenEvent & EPOLLET ? "ET" : "LT"),
           (_connEvent & EPOLLET ? "ET" : "LT"));
     LOG_I("LogSys level: {}", logLevel);
-    LOG_I("srcDir: {}", http::Conn::srcDir);
+    LOG_I("srcDir: {}", http::Conn::staticDir);
     LOG_I("SqlConnPool num: {0}, ThreadPool num: {1}", connPoolNum, threadNum);
 }
 
-WebServer::~WebServer() {
+Server::~Server() {
     close(_listenFd);
     _isClose = true;
-    free(_srcDir);
     db::SqlConnector::GetInstance().Close();
     LOG_I("=====================Server exited=====================");
+    Logger::Flush();
+    Logger::Shutdown();
 }
 
 // TODO 我在 Epoller 里也设置了 trigMode 的设置与检查
 // 检查是否有问题
-void WebServer::initEventMode(int trigMode) {
+void Server::initEventMode(int trigMode) {
     _listenEvent = EPOLLRDHUP;
     _connEvent = EPOLLONESHOT | EPOLLRDHUP;
     switch (trigMode) {
@@ -126,7 +129,7 @@ void WebServer::initEventMode(int trigMode) {
 }
 
 // TODO 改为自己的 timer 实现，替换为红黑树
-void WebServer::Start() {
+void Server::Start() {
     int timeMS = -1; /* epoll wait timeout == -1 无事件将阻塞 */
     if (!_isClose) {
         LOG_I("Server start at {}",
@@ -137,9 +140,9 @@ void WebServer::Start() {
                 timeMS = _timer->GetNextTick();
 #elif
                 // TODO
-#endif // DEBUG
+#endif // __V0
             }
-            int eventCnt = _epoller->Wait(timeMS);
+            const int eventCnt = _epoller->Wait(timeMS);
             for (int i = 0; i < eventCnt; i++) {
                 /* 处理事件 */
                 int fd = _epoller->GetEventFd(i);
@@ -167,43 +170,56 @@ void WebServer::Start() {
     }
 }
 
-void WebServer::sendError(int fd, const char* info) {
+void Server::Stop() {
+    close(_listenFd);
+    db::SqlConnector::GetInstance().Close();
+    _isClose = true;
+    LOG_I("=====================Server stop=====================");
+    Logger::Flush();
+    Logger::Shutdown();
+}
+
+void Server::sendError(int fd, const char* info) {
     assert(fd > 0);
-    int ret = send(fd, info, strlen(info), 0);
-    if (ret > 0) {
+    if (const int ret = send(fd, info, strlen(info), 0); ret > 0) {
         LOG_W("send error to client {} error!", fd);
     }
     close(fd);
 }
 
-void WebServer::closeConn(http::Conn* client) {
+void Server::closeConn(http::Conn* client) const {
     assert(client);
     LOG_I("client {} quit.", client->GetFd());
-    _epoller->DelFd(client->GetFd());
+    if (!_epoller->DelFd(client->GetFd())) {
+        LOG_E("Failed to delete client fd {}!", client->GetFd());
+    }
     client->Close();
 }
 
-void WebServer::addClient(int fd, sockaddr_in addr) {
+void Server::addClient(int fd, const sockaddr_in& addr) {
     assert(fd > 0);
     _users[fd].init(fd, addr);
     if (_timeoutMS > 0) {
 #ifdef __V0
         _timer->Add(fd, _timeoutMS,
-                    std::bind(&WebServer::closeConn, this, &_users[fd]));
+                    [this, capture0 = &_users[fd]] { closeConn(capture0); });
 #elif
 // TODO
 #endif // !__V0
-        _epoller->AddFd(fd, EPOLLIN | _connEvent);
+        if (!_epoller->AddFd(fd, EPOLLIN | _connEvent)) {
+            LOG_E("Failed to add client fd {}!", fd);
+        }
         SetFdNonblock(fd);
         LOG_I("Client {} in!", _users[fd].GetFd());
     }
 }
 
-void WebServer::dealListen() {
-    struct sockaddr_in addr;
+void Server::dealListen() {
+    struct sockaddr_in addr{};
     socklen_t len = sizeof(addr);
     do {
-        int fd = accept(_listenFd, (struct sockaddr*)&addr, &len);
+        const int fd =
+            accept(_listenFd, reinterpret_cast<struct sockaddr*>(&addr), &len);
         if (fd <= 0) {
             return;
         } else if (http::Conn::userCount >= MAX_FD) {
@@ -215,39 +231,39 @@ void WebServer::dealListen() {
     } while (_listenEvent & EPOLLET);
 }
 
-void WebServer::dealRead(http::Conn* client) {
+void Server::dealRead(http::Conn* client) const {
     assert(client);
     extentTime(client);
 #ifdef __V0
-    _threadpool->AddTask(std::bind(&WebServer::onRead, this, client));
+    _threadpool->AddTask([this, client] { onRead(client); });
 #elif
 // TODO 线程池替换
-#endif // DEBUG
+#endif // __V0
 }
 
-void WebServer::dealWrite(http::Conn* client) {
+void Server::dealWrite(http::Conn* client) const {
     assert(client);
     extentTime(client);
 #ifdef __V0
-    _threadpool->AddTask(std::bind(&WebServer::onWrite, this, client));
+    _threadpool->AddTask([this, client] { onWrite(client); });
 #elif
 // TODO 线程池替换
-#endif // DEBUG
+#endif // __V0
 }
 
-void WebServer::extentTime(http::Conn* client) {
+void Server::extentTime(http::Conn* client) const {
     assert(client);
 #ifdef __V0
     if (_timeoutMS > 0) {
         _timer->Adjust(client->GetFd(), _timeoutMS);
 #elif
 // TODO timer 替换
-#endif // DEBUG
+#endif // __V0
     }
 }
 
 // 干什么用？
-void WebServer::onRead(http::Conn* client) {
+void Server::onRead(http::Conn* client) const {
     assert(client);
     int ret = -1;
     int readErrno = 0;
@@ -259,29 +275,33 @@ void WebServer::onRead(http::Conn* client) {
     onProcess(client);
 }
 
-void WebServer::onProcess(http::Conn* client) {
+void Server::onProcess(http::Conn* client) const {
     if (client->process()) {
-        _epoller->ModFd(client->GetFd(), _connEvent | EPOLLOUT);
+        if (!_epoller->ModFd(client->GetFd(), _connEvent | EPOLLOUT)) {
+            LOG_E("Failed to mod fd {}!", client->GetFd());
+        }
     } else {
-        _epoller->ModFd(client->GetFd(), _connEvent | EPOLLIN);
+        if (!_epoller->ModFd(client->GetFd(), _connEvent | EPOLLIN)) {
+            LOG_E("Failed to mod fd {}!", client->GetFd());
+        }
     }
 }
 
-void WebServer::onWrite(http::Conn* client) {
+void Server::onWrite(http::Conn* client) const {
     assert(client);
     int ret = -1;
     int writeErrno = 0;
     ret = client->write(&writeErrno);
-    if (client->ToWriteBytes() == 0) {
-        // 传输完成
+    if (client->ToWriteBytes() == 0) { // 传输完成
         if (client->IsKeepAlive()) {
             onProcess(client);
             return;
         }
     } else if (ret < 0) {
-        if (writeErrno == EAGAIN) {
-            // 继续传输
-            _epoller->ModFd(client->GetFd(), _connEvent | EPOLLOUT);
+        if (writeErrno == EAGAIN) { // 继续传输
+            if (!_epoller->ModFd(client->GetFd(), _connEvent | EPOLLOUT)) {
+                LOG_E("Failed to mod fd {}!", client->GetFd());
+            }
             return;
         }
     }
@@ -289,11 +309,11 @@ void WebServer::onWrite(http::Conn* client) {
 }
 
 /* Create listenFd */
-bool WebServer::initSocket() {
+bool Server::initSocket() {
     int ret = 0;
-    struct sockaddr_in addr;
+    struct sockaddr_in addr{};
     if (_port > 65535 || _port < 1024) {
-        LOG_E("port: {} is invalid!", _port);
+        LOG_E("Port: {} is invalid!", _port);
         return false;
     }
     addr.sin_family = AF_INET;
@@ -307,7 +327,7 @@ bool WebServer::initSocket() {
 
     _listenFd = socket(AF_INET, SOCK_STREAM, 0);
     if (_listenFd < 0) {
-        LOG_E("create socket error!, port: {0}, {1}", _port, strerror(errno));
+        LOG_E("Create socket error!, port: {0}, {1}", _port, strerror(errno));
         return false;
     }
 
@@ -315,69 +335,71 @@ bool WebServer::initSocket() {
                      sizeof(optLinger));
     if (ret < 0) {
         close(_listenFd);
-        LOG_E("init linger error! port: {0}, {1}", _port, strerror(errno));
+        LOG_E("Init linger error! port: {0}, {1}", _port, strerror(errno));
         return false;
     }
 
-    int optval = 1;
+    constexpr int optval = 1;
     // 端口复用，只有最后一个套接字会正常接收数据
     ret = setsockopt(_listenFd, SOL_SOCKET, SO_REUSEADDR, (const void*)&optval,
                      sizeof(int));
     if (ret == -1) {
-        LOG_E("set socket setsockopt error! {}", strerror(errno));
+        LOG_E("Set socket error! {}", strerror(errno));
         close(_listenFd);
         return false;
     }
 
-    ret = bind(_listenFd, (struct sockaddr*)&addr, sizeof(addr));
+    ret = bind(_listenFd, reinterpret_cast<struct sockaddr*>(&addr),
+               sizeof(addr));
     if (ret < 0) {
-        LOG_E("bind port: {0} error! {1}", _port, strerror(errno));
+        LOG_E("Bind port: {0} error! {1}", _port, strerror(errno));
         close(_listenFd);
         return false;
     }
 
     ret = listen(_listenFd, 6); // 此处设置
     if (ret < 0) {
-        LOG_E("listen port: {0} error!, {1}", _port, strerror(errno));
+        LOG_E("Listen port: {0} error!, {1}", _port, strerror(errno));
         close(_listenFd);
         return false;
     }
 
     ret = _epoller->AddFd(_listenFd, _listenEvent | EPOLLIN);
     if (ret == 0) {
-        LOG_E("add listen error! {}", strerror(errno));
+        LOG_E("Add listen fd : {0} error! {1}", _listenFd, strerror(errno));
         close(_listenFd);
         return false;
     }
     SetFdNonblock(_listenFd);
-    LOG_I("server port: {}", _port);
+    LOG_I("Server port: {}.", _port);
     return true;
 }
 
-int WebServer::SetFdNonblock(int fd) {
+int Server::SetFdNonblock(const int fd) {
     assert(fd > 0);
     return fcntl(fd, F_SETFL, fcntl(fd, F_GETFD, 0) | O_NONBLOCK);
 }
 
 } // namespace v0
 
-std::unique_ptr<v0::WebServer>
-NewServerFromConfig(const std::string& configPath) {
+std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath) {
     Config::Init(configPath);
+    Logger::Init();
     // TODO 更改 config 的接口，获取的时候通过不同函数直接转换为 int 或者 uint
-
-    auto appPort = atoi(zws::GET_CONFIG("app.port").c_str());
-    auto trig = atoi(zws::GET_CONFIG("app.trig").c_str());
-    auto timeout = atoi(zws::GET_CONFIG("app.timeout").c_str());
-
-    auto host = zws::GET_CONFIG("mysql.host");
-    auto sqlPort =
+    // strtol 是 C 语言标准库中的一个函数，用于将字符串转换为长整型（long
+    // int）数值
+    const auto appPort =
+        static_cast<unsigned int>(atoi(zws::GET_CONFIG("app.port").c_str()));
+    const auto trig = atoi(zws::GET_CONFIG("app.trig").c_str());
+    const auto timeout = atoi(zws::GET_CONFIG("app.timeout").c_str());
+    const auto host = zws::GET_CONFIG("mysql.host");
+    const auto sqlPort =
         static_cast<unsigned int>(atoi(zws::GET_CONFIG("mysql.port").c_str()));
-    auto sqlUser = zws::GET_CONFIG("mysql.user");
-    auto sqlPassword = zws::GET_CONFIG("mysql.password");
-    auto database = zws::GET_CONFIG("mysql.database");
+    const auto sqlUser = zws::GET_CONFIG("mysql.user");
+    const auto sqlPassword = zws::GET_CONFIG("mysql.password");
+    const auto database = zws::GET_CONFIG("mysql.database");
 
-    auto server = std::make_unique<v0::WebServer>(
+    auto server = std::make_unique<v0::Server>(
         appPort, trig, timeout, false, sqlPort, sqlUser.c_str(),
         sqlPassword.c_str(), database.c_str(), 12, 6, true, 1, 1024);
 

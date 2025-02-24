@@ -19,7 +19,7 @@ namespace v0 {
 
 class ThreadPool {
   public:
-    explicit ThreadPool(size_t threadCount = 6)
+    explicit ThreadPool(const size_t threadCount = 6)
         : _pool(std::make_shared<Pool>()) {
         assert(threadCount > 0);
         for (size_t i = 0; i < threadCount; i++) {
@@ -95,7 +95,7 @@ class ThreadPool {
     struct Pool {
         std::mutex mtx;
         std::condition_variable cond;
-        bool isClosed;
+        bool isClosed{};
         std::queue<std::function<void()>> tasks;
     };
     std::shared_ptr<Pool> _pool;
