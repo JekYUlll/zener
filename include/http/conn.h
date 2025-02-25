@@ -15,7 +15,7 @@
 #include <sys/uio.h> // readv/writev
 
 
-namespace zws::http {
+namespace zener::http {
 
 // TODO
 // 现在的 Conn 存储 request 和 response , 感觉有点占空间
@@ -75,7 +75,7 @@ class Conn {
     Response _response;
 };
 
-} // namespace zws::http
+} // namespace zener::http
 
 
 #endif // !ZENER_HTTP_CONN_H

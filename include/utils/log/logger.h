@@ -11,7 +11,7 @@
 #endif
 
 #ifdef __USE_SPDLOG
-namespace zws {
+namespace zener {
 
 class GLogger {
 
@@ -22,21 +22,21 @@ class GLogger {
 };
 
 #define LOG_T(...)                                                             \
-    ZENER_LOG_LOGGER_CALL(zws::Logger::GetLoggerInstance(),                    \
+    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                    \
                           spdlog::level::trace, __VA_ARGS__)
 #define LOG_D(...)                                                             \
-    ZENER_LOG_LOGGER_CALL(zws::Logger::GetLoggerInstance(),                    \
+    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                    \
                           spdlog::level::debug, __VA_ARGS__)
 #define LOG_I(...)                                                             \
-    ZENER_LOG_LOGGER_CALL(zws::Logger::GetLoggerInstance(),                    \
+    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                    \
                           spdlog::level::info, __VA_ARGS__)
 #define LOG_W(...)                                                             \
-    ZENER_LOG_LOGGER_CALL(zws::Logger::GetLoggerInstance(),                    \
+    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                    \
                           spdlog::level::warn, __VA_ARGS__)
 #define LOG_E(...)                                                             \
-    ZENER_LOG_LOGGER_CALL(zws::Logger::GetLoggerInstance(),                    \
+    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                    \
                           spdlog::level::err, __VA_ARGS__)
-} // namespace zws
+} // namespace zener
 #else
 #include "_logger.h"
 #define LOG_T(...) std::cout << __VA_ARGS__ << std::endl

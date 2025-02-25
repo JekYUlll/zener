@@ -7,7 +7,7 @@
 #include <iostream>
 #include <memory>
 
-namespace zws {
+namespace zener {
 
 Logger Logger::_instance{};
 static std::shared_ptr<spdlog::logger> sSpdLogger{};
@@ -38,8 +38,7 @@ void Logger::Init() {
         _sInitialized = true;
 
         if (sSpdLogger) {
-            sSpdLogger->info("=========================== New Session "
-                             "Started ===========================");
+            sSpdLogger->info("New Session Start =========================>");
         }
     } catch (const spdlog::spdlog_ex& ex) {
         std::cerr << "Logger initialization failed: " << ex.what() << std::endl;
@@ -104,4 +103,4 @@ void Logger::log(const spdlog::source_loc& loc,
     }
 }
 
-} // namespace zws
+} // namespace zener

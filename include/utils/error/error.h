@@ -1,7 +1,7 @@
 #ifndef ZENER_UTILS_ERROR_H
 #define ZENER_UTILS_ERROR_H
 
-namespace zws::error {
+namespace zener::error {
 
 enum class GeneralErrorCode {
     GENERAL_ERROR = -1,
@@ -12,6 +12,6 @@ enum class GeneralErrorCode {
 // 将普通函数错误码转换为字符串
 const char* GeneralErrorCodeToString(GeneralErrorCode code);
 
-} // namespace zws::error
+} // namespace zener::error
 
 #endif // !ZENER_UTILS_ERROR_H

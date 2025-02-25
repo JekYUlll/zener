@@ -7,7 +7,7 @@
 #include <regex>
 
 
-namespace zws::http {
+namespace zener::http {
 
 using namespace std;
 
@@ -259,4 +259,4 @@ bool Request::UserVerify(const string& name, const string& pwd,
     return flag;
 }
 
-} // namespace zws::http
+} // namespace zener::http

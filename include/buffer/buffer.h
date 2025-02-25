@@ -30,7 +30,7 @@ prePos？读过的地方直接就能覆盖？直接用 readPos 当做 prePos 就
 #include <unistd.h>
 #include <vector>
 
-namespace zws {
+namespace zener {
 
 static constexpr size_t INIT_BUFFER_SIZE = 1024;
 // static constexpr size_t INIT_PREPEND_SIZE = 8;
@@ -111,6 +111,6 @@ class Buffer {
     std::atomic<size_t> _writePos;
 };
 
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_BUFFER_H

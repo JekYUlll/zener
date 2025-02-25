@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 
-namespace zws::http {
+namespace zener::http {
 
 const char* Conn::staticDir;
 std::atomic<int> Conn::userCount;
@@ -112,4 +112,4 @@ bool Conn::process() {
     return true;
 }
 
-} // namespace zws::http
+} // namespace zener::http

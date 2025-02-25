@@ -7,7 +7,7 @@
 
 #include <string>
 
-namespace zws {
+namespace zener {
 namespace fs {
 
 class File {
@@ -31,6 +31,6 @@ class File {
 };
 
 } // namespace fs
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_FILE_H

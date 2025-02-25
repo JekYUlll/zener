@@ -3,14 +3,12 @@
 #include <cassert>
 #include <sys/epoll.h>
 #include <unistd.h>
-
-namespace zws {
-
 /*
 epoll_create
 epoll_ctl
 epoll_wait
 */
+namespace zener {
 
 Epoller::Epoller(const int maxEvent, const bool isET)
     : _isET(isET), _epollFd(epoll_create(512)), _events(maxEvent) {
@@ -23,7 +21,7 @@ bool Epoller::AddFd(const int fd, const uint32_t events) const {
     if (fd < 0) {
         return false;
     }
-    epoll_event ev = {0};
+    epoll_event ev = {};
     ev.data.fd = fd;
     ev.events = events;
     ev.events = _isET ? EPOLLIN | EPOLLET
@@ -35,7 +33,7 @@ bool Epoller::ModFd(const int fd, const uint32_t events) const {
     if (fd < 0) {
         return false;
     }
-    epoll_event ev = {0};
+    struct epoll_event ev = {};
     ev.data.fd = fd;
     ev.events = events;
     return 0 == epoll_ctl(_epollFd, EPOLL_CTL_MOD, fd, &ev);
@@ -45,7 +43,7 @@ bool Epoller::DelFd(const int fd) const {
     if (fd < 0) {
         return false;
     }
-    epoll_event ev = {0};
+    epoll_event ev = {};
     return 0 == epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, &ev);
 }
 
@@ -54,7 +52,7 @@ int Epoller::Wait(const int timeoutMs) {
                       timeoutMs);
 }
 
-int Epoller::GetEventFd(size_t i) const {
+int Epoller::GetEventFd(const size_t i) const {
     assert(i < _events.size() && i >= 0); // i >= 0 永远为 true ?
     return _events[i].data.fd;
 }
@@ -64,4 +62,4 @@ uint32_t Epoller::GetEvents(const size_t i) const {
     return _events[i].events;
 }
 
-} // namespace zws
+} // namespace zener

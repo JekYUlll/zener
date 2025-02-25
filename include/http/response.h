@@ -7,7 +7,7 @@
 #include <unordered_map>
 
 
-namespace zws::http {
+namespace zener::http {
 
 class Response {
   public:
@@ -70,7 +70,7 @@ class Response {
 //     StatusCode code;
 // };
 
-} // namespace zws::http
+} // namespace zener::http
 
 
 #endif // !ZENER_HTTP_RESPONSE_H

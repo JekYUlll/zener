@@ -10,7 +10,7 @@
 #include <chrono>
 #include <future>
 
-namespace zws {
+namespace zener {
 namespace http {
 
 class Context {
@@ -32,6 +32,6 @@ class Context {
 };
 
 } // namespace http
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_HTTP_CONTEXT_H

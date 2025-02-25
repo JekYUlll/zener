@@ -12,11 +12,11 @@
 #include <cstdint>
 #include <memory>
 #include <netinet/in.h>
-#include <signal.h>
+#include <csignal>
 #include <thread>
 #include <unordered_map>
 
-namespace zws {
+namespace zener {
 namespace v0 {
 
 class Server {
@@ -30,23 +30,21 @@ class Server {
 
     void Start();
     void Stop();
-
-    // 优雅退出，等待所有连接处理完毕
-    void Shutdown(int timeoutMS = 5000);
+    void Shutdown(int timeoutMS = 5000); // 优雅退出
 
     [[nodiscard]] bool IsClosed() const { return _isClose; }
 
   private:
     bool initSocket();
     void initEventMode(int trigMode);
-    void addClient(int fd, const sockaddr_in& addr);
+    void addClient(int fd, const sockaddr_in& addr) const;
 
-    void dealListen();
+    void dealListen() const;
     void dealRead(http::Conn* client) const;
     void dealWrite(http::Conn* client) const;
 
     static void sendError(int fd, const char* info);
-    void extentTime(http::Conn* client) const;
+    void extentTime(const http::Conn* client) const;
     void closeConn(http::Conn* client) const;
 
     void onRead(http::Conn* client) const;
@@ -55,7 +53,7 @@ class Server {
 
     static constexpr int MAX_FD = 65535;
 
-    static int SetFdNonblock(int fd);
+    static int setFdNonblock(int fd);
 
     int _port;
     bool _openLinger;
@@ -70,7 +68,7 @@ class Server {
 
     std::unique_ptr<ThreadPool> _threadpool;
     std::unique_ptr<Epoller> _epoller;
-    std::unordered_map<int, http::Conn> _users;
+    mutable std::unordered_map<int, http::Conn> _users;
 };
 
 } // namespace v0
@@ -170,7 +168,7 @@ class ServerGuard {
 // 在类外部定义静态成员
 inline ServerGuard* ServerGuard::_instance = nullptr;
 
-} // namespace zws
+} // namespace zener
 
 // class Server : public IRestful {
 //   public:

@@ -11,7 +11,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace zws {
+namespace zener {
 
 #ifdef USE_TOMLPLUSPLUS
 struct Config {};
@@ -61,6 +61,6 @@ struct Config {
 
 #endif // !USE_TOMLPLUSPLUS
 
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_CONFIG_H

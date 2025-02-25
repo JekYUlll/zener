@@ -23,7 +23,7 @@
 // #include <semaphore.h>
 // #include <boost/lockfree/queue.hpp>
 
-namespace zws::db {
+namespace zener::db {
 
 static constexpr int SQL_CONN_SIZE = 8;
 
@@ -62,7 +62,7 @@ class SqlConnector {
     std::condition_variable _condition;
 };
 
-} // namespace zws::db
+} // namespace zener::db
 
 
 #endif // !ZENER_SQL_CONNECT_POOL_H

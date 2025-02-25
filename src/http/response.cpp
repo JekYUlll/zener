@@ -5,7 +5,7 @@
 #include <sys/mman.h>
 
 
-namespace zws::http {
+namespace zener::http {
 
 using namespace std;
 
@@ -192,4 +192,4 @@ void Response::ErrorContent(Buffer& buff, const string& message) const {
 //     }
 // }
 
-} // namespace zws::http
+} // namespace zener::http

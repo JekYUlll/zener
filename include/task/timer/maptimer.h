@@ -2,14 +2,14 @@
 #define ZENER_MULTIMAP_TIMER_H
 // https://www.bilibili.com/video/BV1dP411r7Lf?spm_id_from=333.788.videopod.episodes&vd_source=9b0b9cbfd8c349b95b4776bd10953f3a&p=3
 // 基于 std::multimap 红黑树的定时器
-#include "task/timer/timer.h"
+#include "task/timer/Itimer.h"
 
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <utility>
 
-namespace zws {
+namespace zener {
 namespace rbtimer {
 
 class Timer {
@@ -77,13 +77,6 @@ class TimerManager final : public ITimerManager {
 };
 
 } // namespace rbtimer
-// namespace maptimer
-
-// 提供一个全局的TimerManager别名，方便在不同的实现间切换
-#ifdef __USE_MAPTIMER
-using TimerManagerImpl = rbtimer::TimerManager;
-#endif
-
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_MULTIMAP_TIMER_H

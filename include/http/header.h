@@ -3,7 +3,7 @@
 
 // TODO 优化 http 解析
 
-namespace zws {
+namespace zener {
 namespace http {
 
 // 通用首部字段（General Header Fields）
@@ -27,6 +27,6 @@ class ReqHeader : public Header {};
 class ResHeader : public Header {};
 
 } // namespace http
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_HTTP_HEADER_H

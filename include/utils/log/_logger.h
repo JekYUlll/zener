@@ -9,7 +9,7 @@
 
 #include <mutex>
 
-namespace zws {
+namespace zener {
 
 class MLogger {
   public:
@@ -31,6 +31,6 @@ class MLogger {
     std::mutex _mtx;
 };
 
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_M_LOGGER_H

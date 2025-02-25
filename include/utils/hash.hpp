@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace zws {
+namespace zener {
 
 // 编译时字符串哈希
 constexpr uint32_t hash_str(char const* str, std::size_t n) {
@@ -15,6 +15,6 @@ constexpr uint32_t operator"" _hash(char const* str, const std::size_t n) {
     return hash_str(str, n);
 }
 
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_UTILS_HASH_HPP

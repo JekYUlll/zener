@@ -15,7 +15,7 @@ namespace fs = std::filesystem;
 static auto log_path = "logs";
 
 int main() {
-    zws::Logger::Init();
+    zener::Logger::Init();
 
     try {
         fs::create_directories(log_path);
@@ -25,7 +25,7 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    if (!zws::Logger::WriteToFile("logs/test.log")) {
+    if (!zener::Logger::WriteToFile("logs/test.log")) {
         std::cerr << "Failed to create log file" << std::endl;
         return EXIT_FAILURE;
     }

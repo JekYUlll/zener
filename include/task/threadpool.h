@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-namespace zws {
+namespace zener {
 
 constexpr int THREAD_NUM = 6;
 
@@ -116,6 +116,6 @@ class ThreadPool {
     }
 };
 
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_THREAD_POOL_H

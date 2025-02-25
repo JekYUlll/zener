@@ -10,7 +10,7 @@
 class IRestful {
   protected:
     using Handler = typename std::function<void(
-        const zws::http::HttpRequest& req, zws::http::HttpResponse& res)>;
+        const zener::http::HttpRequest& req, zener::http::HttpResponse& res)>;
 
   public:
     virtual ~IRestful() {}

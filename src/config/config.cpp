@@ -12,7 +12,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace zws {
+namespace zener {
 
 Config Config::_instance;
 
@@ -158,4 +158,4 @@ const std::string& Config::GetConfigSafe(const std::string& key) const {
     return empty;
 }
 
-} // namespace zws
+} // namespace zener

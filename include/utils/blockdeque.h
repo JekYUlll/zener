@@ -21,7 +21,7 @@
 // 类内定义的成员函数（包括构造函数/析构函数）
 // 必须是隐式内联的，否则无法通过编译
 
-namespace zws {
+namespace zener {
 
 template <typename T>
 class BlockDeque {
@@ -213,6 +213,6 @@ inline bool BlockDeque<T>::pop(T& item, int timeout) {
     return true;
 }
 
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_BLOCKDEQUE_H

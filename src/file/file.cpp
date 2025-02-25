@@ -1,7 +1,7 @@
 #include "file/file.h"
 
-namespace zws {
+namespace zener {
 
 // File::File(const std::string& path) {}
 
-} // namespace zws
+} // namespace zener

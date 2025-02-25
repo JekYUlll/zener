@@ -8,7 +8,7 @@
 #include <cassert>
 #include <mysql/mysql.h>
 
-namespace zws::db {
+namespace zener::db {
 
 class SqlConnRAII {
 
@@ -31,7 +31,7 @@ class SqlConnRAII {
     SqlConnector* _connPool;
 };
 
-} // namespace zws::db
+} // namespace zener::db
 
 
 #endif // !ZENER_CONN_RAII_HPP

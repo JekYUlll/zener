@@ -23,7 +23,7 @@ UserID=string&PWD=string&OrderConfirmation=string                     (请求体
 #include <unordered_map>
 #include <unordered_set>
 
-namespace zws {
+namespace zener {
 namespace http {
 
 // enum class HttpMethod {
@@ -116,6 +116,6 @@ class Request : std::enable_shared_from_this<Request> {
 // };
 
 } // namespace http
-} // namespace zws
+} // namespace zener
 
 #endif // ZENER_HTTP_REQUEST_H

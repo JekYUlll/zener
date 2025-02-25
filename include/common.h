@@ -10,9 +10,9 @@
 #define ZENER_CONFIG_FILEPATH "config.toml"
 
 #ifdef __USE_STRING
-namespace zws {
+namespace zener {
 #define String std::string
-} // namespace zws
+} // namespace zener
 #endif // !__USE_STRING
 
 #if defined(_MSC_VER)

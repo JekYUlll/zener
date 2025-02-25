@@ -3,7 +3,7 @@
 
 #include <functional>
 
-namespace zws {
+namespace zener {
 
 class Defer {
   public:
@@ -24,6 +24,6 @@ class Defer {
 #define CONCAT(x, y) CONCAT_IMPL(x, y)
 #define defer(func) Defer CONCAT(_defer_, __LINE__)(func)
 
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_DEFER_H

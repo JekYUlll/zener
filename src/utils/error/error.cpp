@@ -1,6 +1,6 @@
 #include "utils/error/error.h"
 
-namespace zws {
+namespace zener {
 namespace error {
 
 const char* GeneralErrorCodeToString(GeneralErrorCode code) {
@@ -17,4 +17,4 @@ const char* GeneralErrorCodeToString(GeneralErrorCode code) {
 }
 
 } // namespace error
-} // namespace zws
+} // namespace zener

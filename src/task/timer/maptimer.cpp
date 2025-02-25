@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <utility>
 
-namespace zws {
+namespace zener {
 namespace rbtimer {
 
 Timer::Timer() : _period(0), _repeat(-1) { _time = Now(); }
@@ -80,4 +80,4 @@ int TimerManager::GetNextTick() {
 }
 
 } // namespace maptimer
-} // namespace zws
+} // namespace zener

@@ -1,15 +1,15 @@
-#ifndef ZENER_TIMER_H
-#define ZENER_TIMER_H
+#ifndef ZENER_HEAP_TIMER_H
+#define ZENER_HEAP_TIMER_H
 /// webserver 默认实现
 /// 小根堆定时器
-#include "task/timer/timer.h"
+#include "task/timer/Itimer.h"
 
 #include <chrono>
 #include <functional>
 #include <unordered_map>
 #include <vector>
 
-namespace zws {
+namespace zener {
 namespace v0 {
 
 typedef std::function<void()> TimeoutCallBack;
@@ -82,7 +82,7 @@ class HeapTimerManager final : public ITimerManager {
     int GetNextTick() override { return _timer.GetNextTick(); }
 
     // 基于业务ID取消定时器
-    void CancelByKey(int key) {
+    void CancelByKey(const int key) {
         if (const auto it = _keyToTimerId.find(key); it != _keyToTimerId.end()) {
             const int timerId = it->second;
             // 直接访问HeapTimer的私有成员
@@ -138,11 +138,7 @@ class HeapTimerManager final : public ITimerManager {
 
 } // namespace v0
 
-// 提供一个全局的TimerManager别名，方便在不同的实现间切换
-#ifndef __USE_MAPTIMER
-using TimerManagerImpl = v0::HeapTimerManager;
-#endif
 
-} // namespace zws
+} // namespace zener
 
-#endif // !ZENER_TIMER_H
+#endif // !ZENER_HEAP_TIMER_H

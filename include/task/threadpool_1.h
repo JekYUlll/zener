@@ -14,7 +14,7 @@
 #include <queue>
 #include <thread>
 
-namespace zws {
+namespace zener {
 namespace v0 {
 
 class ThreadPool {
@@ -123,6 +123,6 @@ class ThreadPool {
 };
 
 } // namespace v0
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_THREADPOOL1_H

@@ -6,7 +6,7 @@
 #include <mysql/mysql.h>
 #include <string>
 
-namespace zws {
+namespace zener {
 namespace db {
 
 // class MYSQL : public Database {
@@ -18,6 +18,6 @@ namespace db {
 // };
 
 } // namespace db
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_DB_MYSQL_H

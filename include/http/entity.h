@@ -5,7 +5,7 @@
 
 #include <vector>
 
-namespace zws {
+namespace zener {
 namespace http {
 
 #define CR 0x0D
@@ -25,6 +25,6 @@ class Entity {
 };
 
 } // namespace http
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_HTTP_ENTITY

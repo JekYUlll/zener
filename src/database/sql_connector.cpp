@@ -3,7 +3,7 @@
 
 #include <cassert>
 
-namespace zws::db {
+namespace zener::db {
 
 int SqlConnector::_maxConnSize;
 
@@ -73,4 +73,4 @@ size_t SqlConnector::GetFreeConnCount() const {
     return _connQue.size();
 }
 
-} // namespace zws::db
+} // namespace zener::db

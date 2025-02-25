@@ -5,7 +5,7 @@
 #include <atomic>
 #include <string>
 
-namespace zws {
+namespace zener {
 
 class Logger {
   public:
@@ -51,6 +51,6 @@ class Logger {
     (adlog)->Log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},      \
                  level, __VA_ARGS__)
 
-} // namespace zws
+} // namespace zener
 
 #endif // LOG_H

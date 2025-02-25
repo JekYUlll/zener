@@ -1,7 +1,7 @@
 #ifndef ZENER_UTILS_RELEASE_HPP
 #define ZENER_UTILS_RELEASE_HPP
 
-namespace zws {
+namespace zener {
 
 template <typename Interface>
 void SafeRelease(Interface*& pInterfaceToRelease) {
@@ -11,6 +11,6 @@ void SafeRelease(Interface*& pInterfaceToRelease) {
     }
 }
 
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_UTILS_RELEASE_HPP

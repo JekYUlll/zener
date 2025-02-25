@@ -4,7 +4,7 @@
 #include <mutex>
 #include <queue>
 
-namespace zws {
+namespace zener {
 
 template <typename T>
 class SafeQueue {
@@ -63,6 +63,6 @@ inline bool SafeQueue<T>::dequeue(T& t) {
     return true;
 }
 
-} // namespace zws
+} // namespace zener
 
 #endif // !SAFEQUEUE_H

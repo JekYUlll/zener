@@ -3,7 +3,7 @@
 
 #include <mysql/mysql.h>
 
-namespace zws {
+namespace zener {
 namespace db {
 
 class Database {
@@ -14,6 +14,6 @@ class Database {
 };
 
 } // namespace db
-} // namespace zws
+} // namespace zener
 
 #endif // !ZENER_DATABASE_H

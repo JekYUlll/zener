@@ -2,11 +2,11 @@
 // #include "core/server.h"
 #include "utils/log/use_spd_log.h"
 
-namespace zws {
+namespace zener {
 
 void Init() {
     Logger::Init();
     // Server::Init();
 }
 
-} // namespace zws
+} // namespace zener

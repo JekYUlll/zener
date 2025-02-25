@@ -1,6 +1,6 @@
 #include "utils/defer.h"
 
-namespace zws {
+namespace zener {
 
 Defer::Defer(std::function<void()> func)
     : _func(std::move(func)), _active(true) {}
@@ -16,4 +16,4 @@ Defer::~Defer() {
     }
 }
 
-} // namespace zws
+} // namespace zener
