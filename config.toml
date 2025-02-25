@@ -1,5 +1,4 @@
 [app]
-name = "zener"
 port = 1316
 trig = 3
 timeout = 60000

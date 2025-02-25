@@ -38,8 +38,8 @@ void Logger::Init() {
         _sInitialized = true;
 
         if (sSpdLogger) {
-            sSpdLogger->info("\n=========================== New Session "
-                             "Started ===========================\n");
+            sSpdLogger->info("=========================== New Session "
+                             "Started ===========================");
         }
     } catch (const spdlog::spdlog_ex& ex) {
         std::cerr << "Logger initialization failed: " << ex.what() << std::endl;

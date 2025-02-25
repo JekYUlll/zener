@@ -19,12 +19,12 @@ class File {
     };
 
   public:
-    File(const std::string& path);
+    explicit File(const std::string& path);
     ~File();
 
     const char* Name();
 
-    _ZENER_SHORT_FUNC const char* GetPath() { return _path.c_str(); }
+    _ZENER_SHORT_FUNC const char* GetPath() const { return _path.c_str(); }
 
   private:
     std::string _path;

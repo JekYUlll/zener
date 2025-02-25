@@ -1,9 +1,8 @@
 #ifndef ZENER_MULTIMAP_TIMER_H
 #define ZENER_MULTIMAP_TIMER_H
-
 // https://www.bilibili.com/video/BV1dP411r7Lf?spm_id_from=333.788.videopod.episodes&vd_source=9b0b9cbfd8c349b95b4776bd10953f3a&p=3
 // 基于 std::multimap 红黑树的定时器
-// 并且为单例模式
+#include "task/timer/timer.h"
 
 #include <cstdint>
 #include <functional>
@@ -11,7 +10,7 @@
 #include <utility>
 
 namespace zws {
-namespace maptimer {
+namespace rbtimer {
 
 class Timer {
     friend class TimerManager;
@@ -36,12 +35,12 @@ class Timer {
 };
 
 template <typename F, typename... Args>
-void Timer::Callback(int milliseconds, F&& f, Args&&... args) {
+void Timer::Callback(const int milliseconds, F&& f, Args&&... args) {
     _period = milliseconds;
     _func = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
 }
 
-class TimerManager {
+class TimerManager final : public ITimerManager {
   public:
     static TimerManager& GetInstance() {
         static TimerManager instance;
@@ -50,44 +49,41 @@ class TimerManager {
 
     TimerManager(const TimerManager&) = delete;
     TimerManager& operator=(TimerManager&) = delete;
-    ~TimerManager() = default;
+    ~TimerManager() override = default;
 
-    // 注册 无限重复版本
-    template <typename F, typename... Args>
-    void Schedule(int milliseconds, F&& f, Args&&... args);
+    // 更新定时器，处理到期任务
+    void Update() override;
 
-    // 注册
-    template <typename F, typename... Args>
-    void Schedule(int milliseconds, int repeat, F&& f, Args&&... args);
+    // 在单独线程中循环处理定时器
+    void Tick() override;
 
-    void Update();
+    // 停止定时器
+    void Stop() override;
 
-    void Tick(); //*
+    // 获取下一个定时事件的超时时间
+    int GetNextTick() override;
 
-    void Stop(); //*
+  protected:
+    // 实际的调度实现
+    void DoSchedule(int milliseconds, int repeat,
+                    std::function<void()> cb) override;
 
   private:
     TimerManager() = default;
-    
-    std::multimap<int64_t, Timer> _timers;
 
-    bool _bClosed{}; //*
+    std::multimap<int64_t, Timer> _timers{};
+
+    bool _bClosed{false};
 };
 
-template <typename F, typename... Args>
-void TimerManager::Schedule(int milliseconds, F&& f, Args&&... args) {
-    Schedule(milliseconds, -1, std::forward<F>(f), std::forward<Args>(args)...);
-}
+} // namespace rbtimer
+// namespace maptimer
 
-template <typename F, typename... Args>
-void TimerManager::Schedule(int milliseconds, int repeat, F&& f,
-                            Args&&... args) {
-    Timer t(repeat);
-    t.Callback(milliseconds, std::forward<F>(f), std::forward<Args>(args)...);
-    _timers.insert(std::make_pair(t._time, t));
-}
+// 提供一个全局的TimerManager别名，方便在不同的实现间切换
+#ifdef __USE_MAPTIMER
+using TimerManagerImpl = rbtimer::TimerManager;
+#endif
 
-} // namespace maptimer
 } // namespace zws
 
 #endif // !ZENER_MULTIMAP_TIMER_H

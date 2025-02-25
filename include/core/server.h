@@ -5,10 +5,15 @@
 #include "http/conn.h"
 #include "task/threadpool_1.h"
 #include "task/timer/heaptimer.h"
+#include "task/timer/timer.h"
 
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <netinet/in.h>
+#include <signal.h>
+#include <thread>
 #include <unordered_map>
 
 namespace zws {
@@ -16,17 +21,20 @@ namespace v0 {
 
 class Server {
   public:
-    Server(int port, int trigMode, int timeoutMS, bool optLinger,
-              int sqlPort, const char* sqlUser, const char* sqlPwd,
-              const char* dbName, int connPoolNum, int threadNum, bool openLog,
-              int logLevel, int logQueSize);
+    Server(int port, int trigMode, int timeoutMS, bool optLinger, int sqlPort,
+           const char* sqlUser, const char* sqlPwd, const char* dbName,
+           int connPoolNum, int threadNum, bool openLog, int logLevel,
+           int logQueSize);
 
     ~Server();
 
     void Start();
-    void Stop(); // 普通退出，非优雅
-    // TODO 实现优雅退出 Shutdown
-    // TODO 实现定时退出
+    void Stop();
+
+    // 优雅退出，等待所有连接处理完毕
+    void Shutdown(int timeoutMS = 5000);
+
+    [[nodiscard]] bool IsClosed() const { return _isClose; }
 
   private:
     bool initSocket();
@@ -54,41 +62,113 @@ class Server {
     int _timeoutMS;
     bool _isClose;
     int _listenFd{};
-    std::string _cwd{}; // 工作目录
+    std::string _cwd{};       // 工作目录
     std::string _staticDir{}; // 静态资源目录
 
     uint32_t _listenEvent{};
     uint32_t _connEvent{};
 
-    std::unique_ptr<HeapTimer> _timer;
-
     std::unique_ptr<ThreadPool> _threadpool;
-
     std::unique_ptr<Epoller> _epoller;
-
     std::unordered_map<int, http::Conn> _users;
 };
 
 } // namespace v0
 
-std::unique_ptr<v0::Server>
-NewServerFromConfig(const std::string& configPath);
+std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath);
 
 class ServerGuard {
   public:
-     explicit ServerGuard(v0::Server* srv) : _srv(srv) {
-        _thread = std::thread([this]{ _srv->Start(); });
-     }
+    explicit ServerGuard(v0::Server* srv)
+        : _srv(srv), _setupSignalHandlers(false), _shouldExit(false) {
+        _thread = std::thread([this] { _srv->Start(); });
+    }
 
-     ~ServerGuard() {
-        _srv->Stop();
-        if(_thread.joinable()) _thread.join();
-        Logger::Shutdown(); // 确保日志最后关闭[2](@ref)
-     }
+    // 带有信号处理的构造函数
+    ServerGuard(v0::Server* srv, bool setupSignalHandlers)
+        : _srv(srv), _setupSignalHandlers(setupSignalHandlers),
+          _shouldExit(false) {
+        if (_setupSignalHandlers) {
+            // 设置静态指针以便信号处理函数访问
+            _instance = this;
+            // 使用更稳定的sigaction替代signal
+            struct sigaction sa{};
+            sa.sa_handler = SignalHandler;
+            sigemptyset(&sa.sa_mask);
+            sa.sa_flags = 0;
+            sigaction(SIGINT, &sa, nullptr);
+            sigaction(SIGTERM, &sa, nullptr);
+        }
+        _thread = std::thread([this] { _srv->Start(); });
+    }
+
+    ~ServerGuard() {
+        Shutdown();
+        if (_thread.joinable()) {
+            _thread.join();
+        }
+        // 清除静态指针
+        if (_setupSignalHandlers && _instance == this) {
+            _instance = nullptr;
+        }
+        Logger::Shutdown();
+    }
+
+    // 等待服务器线程结束，允许超时和中断
+    void Wait() {
+        const int CHECK_INTERVAL_MS = 100;
+
+        while (!_shouldExit) {
+            // 检查服务器线程是否已经结束
+            if (!_thread.joinable() || _srv->IsClosed()) {
+                break;
+            }
+
+            // 定期唤醒以检查_shouldExit标志
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(CHECK_INTERVAL_MS));
+        }
+
+        // 如果收到退出信号或者服务器已经关闭，确保关闭服务器
+        if (_shouldExit && !_srv->IsClosed()) {
+            _srv->Shutdown();
+        }
+
+        // 等待服务器线程结束
+        if (_thread.joinable()) {
+            _thread.join();
+        }
+    }
+
+    // 手动触发服务器关闭
+    void Shutdown() {
+        _shouldExit = true;
+        if (_srv && !_srv->IsClosed()) {
+            _srv->Shutdown();
+        }
+    }
+
   private:
-     v0::Server* _srv;
-     std::thread _thread;
+    // 信号处理函数
+    static void SignalHandler(int sig) {
+        if (_instance) {
+            LOG_I("Signal received: {}, shutting server...", sig);
+            // 只设置标志，避免在信号处理函数中调用复杂函数
+            _instance->_shouldExit = true;
+        }
+    }
+
+    v0::Server* _srv;
+    std::thread _thread;
+    bool _setupSignalHandlers;
+    std::atomic<bool> _shouldExit; // 线程安全的退出标志
+
+    // 静态成员用于信号处理
+    static ServerGuard* _instance;
 };
+
+// 在类外部定义静态成员
+inline ServerGuard* ServerGuard::_instance = nullptr;
 
 } // namespace zws
 

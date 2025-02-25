@@ -1,28 +1,60 @@
-#ifndef ZENER_TIMER_HEAPTIMER_H
-#define ZENER_TIMER_HEAPTIMER_H
+#ifndef ZENER_TIMER_INTERFACE_H
+#define ZENER_TIMER_INTERFACE_H
 
-#include "task/timer/heaptimer.h"
-#include "task/timer/maptimer.h"
+#include <functional>
+#include <tuple>
 
 namespace zws {
 
-// TODO 实现时间轮算法
-// 感觉时间轮也是一种变相的哈希
+// 通用计时器接口，基于MapTimer风格设计
+class ITimerManager {
+  public:
+    virtual ~ITimerManager() = default;
 
-using heaptimer::HeapTimer;
+    // 调度一个任务，无限重复执行
+    template <typename F, typename... Args>
+    void Schedule(int milliseconds, F&& f, Args&&... args) {
+        DoScheduleImpl(milliseconds, -1, std::forward<F>(f),
+                       std::forward<Args>(args)...);
+    }
 
-using maptimer::TimerManager;
+    // 调度一个任务，指定重复次数
+    template <typename F, typename... Args>
+    void Schedule(int milliseconds, int repeat, F&& f, Args&&... args) {
+        DoScheduleImpl(milliseconds, repeat, std::forward<F>(f),
+                       std::forward<Args>(args)...);
+    }
 
-// #define Timer HeapTimer
+    // 更新定时器，处理到期任务
+    virtual void Update() = 0;
 
-// template <typename TimerImpl>
-// class Timer {
-//     TimerImpl timer;
+    // 在单独线程中循环处理定时器
+    virtual void Tick() = 0;
 
-//   public:
-//     void schedule() { timer.schedule; }
-// };
+    // 停止定时器
+    virtual void Stop() = 0;
+
+    // 获取下一个定时事件的超时时间（毫秒）
+    virtual int GetNextTick() = 0;
+
+  protected:
+    // 模板方法的实现，由子类提供
+    template <typename F, typename... Args>
+    void DoScheduleImpl(int milliseconds, int repeat, F&& f, Args&&... args) {
+        // 使用auto直接推导lambda类型，避免std::function的开销
+        auto callback = [func = std::forward<F>(f),
+                         tup = std::make_tuple(std::forward<Args>(args)...)]() {
+            std::apply(func, tup);
+        };
+
+        DoSchedule(milliseconds, repeat, callback);
+    }
+
+    // 实际调度实现，由子类提供
+    virtual void DoSchedule(int milliseconds, int repeat,
+                            std::function<void()> cb) = 0;
+};
 
 } // namespace zws
 
-#endif // !ZENER_TIMER_HEAPTIMER_H
+#endif // !ZENER_TIMER_INTERFACE_H

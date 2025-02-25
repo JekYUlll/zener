@@ -1,2 +1,0 @@
-spdlog 1.13.0
-tomlplusplus 3.4.0

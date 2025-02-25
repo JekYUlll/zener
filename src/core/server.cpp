@@ -20,6 +20,7 @@
 #include <netinet/in.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
+#include <thread>
 #include <unistd.h>
 
 namespace zws {
@@ -30,8 +31,8 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
                const char* sqlPwd, const char* dbName, int connPoolNum,
                int threadNum, bool openLog, int logLevel, int logQueSize)
     : _port(port), _openLinger(optLinger), _timeoutMS(timeoutMS),
-      _isClose(false), _timer(new HeapTimer()),
-      _threadpool(new ThreadPool(threadNum)), _epoller(new Epoller()) {
+      _isClose(false), _threadpool(new ThreadPool(threadNum)),
+      _epoller(new Epoller()) {
 
     // @log init
     Logger::Init();
@@ -136,12 +137,24 @@ void Server::Start() {
         while (!_isClose) {
             if (_timeoutMS > 0) {
 #ifdef __V0
-                timeMS = _timer->GetNextTick();
+                timeMS = HeapTimerManager::GetInstance().GetNextTick();
 #elif
                 // TODO
 #endif // __V0
             }
+
+            // 限制timeMS最大值，确保即使没有事件，epoll_wait也能定期返回检查_isClose标志
+            if (timeMS < 0 || timeMS > 1000) {
+                timeMS = 1000; // 最多阻塞1秒
+            }
+
             const int eventCnt = _epoller->Wait(timeMS);
+
+            // 检查是否需要退出
+            if (_isClose) {
+                break;
+            }
+
             for (int i = 0; i < eventCnt; i++) {
                 /* 处理事件 */
                 int fd = _epoller->GetEventFd(i);
@@ -150,19 +163,44 @@ void Server::Start() {
                     dealListen();
                 } else if (events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
                     // 关闭
-                    assert(_users.count(fd) > 0);
-                    closeConn(&_users[fd]);
+                    if (_users.count(fd) > 0) {
+                        closeConn(&_users[fd]);
+                    } else {
+                        LOG_W("文件描述符 {} 不存在于 _users "
+                              "中，但收到了关闭事件",
+                              fd);
+                        // 确保从epoll中移除
+                        _epoller->DelFd(fd);
+                    }
                 } else if (events & EPOLLIN) {
                     // 读
-                    // 此处触发，abort -- 2025/02/24 20:36
-                    assert(_users.count(fd) > 0);
-                    dealRead(&_users[fd]);
+                    if (_users.count(fd) > 0) {
+                        dealRead(&_users[fd]);
+                    } else {
+                        LOG_W("文件描述符 {} 不存在于 _users "
+                              "中，但收到了读取事件",
+                              fd);
+                        // 确保从epoll中移除
+                        _epoller->DelFd(fd);
+                    }
                 } else if (events & EPOLLOUT) {
                     // 写
-                    assert(_users.count(fd) > 0);
-                    dealWrite(&_users[fd]);
+                    if (_users.count(fd) > 0) {
+                        dealWrite(&_users[fd]);
+                    } else {
+                        LOG_W("文件描述符 {} 不存在于 _users "
+                              "中，但收到了写入事件",
+                              fd);
+                        // 确保从epoll中移除
+                        _epoller->DelFd(fd);
+                    }
                 } else {
                     LOG_E("unexpected event: {}", events);
+                }
+
+                // 再次检查是否需要退出
+                if (_isClose) {
+                    break;
                 }
             }
         }
@@ -178,6 +216,66 @@ void Server::Stop() {
     Logger::Shutdown();
 }
 
+void Server::Shutdown(int timeout_ms) {
+    // 1. 设置关闭标志，停止接受新连接
+    LOG_I("=====================Server graceful shutdown "
+          "initiated=====================");
+    _isClose = true;
+    close(_listenFd);
+    LOG_I("Server shutting down, stopping to accept new connections");
+
+    // 2. 等待所有连接关闭或超时
+    int wait_time = 0;
+    const int check_interval = 100; // 每100ms检查一次
+    int initial_conn_count = _users.size();
+
+    if (initial_conn_count > 0) {
+        LOG_I("Waiting for {} active connections to close", initial_conn_count);
+
+        while (!_users.empty() && wait_time < timeout_ms) {
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(check_interval));
+            wait_time += check_interval;
+
+            // 每秒打印一次剩余连接数
+            if (wait_time % 1000 == 0) {
+                LOG_I("Still waiting: {} connections remaining, elapsed: {}ms",
+                      _users.size(), wait_time);
+            }
+        }
+
+        // 记录关闭情况
+        if (!_users.empty()) {
+            LOG_W("Server shutdown timed out, {} connections still active",
+                  _users.size());
+
+            // 强制关闭剩余连接 - 修复复制问题
+            // 不要复制整个映射，而是复制所有键（文件描述符）
+            std::vector<int> fds_to_close;
+            for (const auto& [fd, _] : _users) {
+                fds_to_close.push_back(fd);
+            }
+
+            // 使用复制的文件描述符访问原始 _users 中的连接
+            for (int fd : fds_to_close) {
+                if (_users.count(fd) > 0) { // 确保连接仍然存在
+                    closeConn(&_users[fd]);
+                }
+            }
+        } else {
+            LOG_I("All {} connections closed successfully", initial_conn_count);
+        }
+    } else {
+        LOG_I("No active connections to close");
+    }
+
+    // 3. 关闭数据库连接和日志
+    db::SqlConnector::GetInstance().Close();
+    LOG_I("=====================Server shutdown complete=====================");
+    Logger::Flush();
+    Logger::Shutdown();
+}
+
 void Server::sendError(int fd, const char* info) {
     assert(fd > 0);
     if (const int ret = send(fd, info, strlen(info), 0); ret > 0) {
@@ -188,11 +286,32 @@ void Server::sendError(int fd, const char* info) {
 
 void Server::closeConn(http::Conn* client) const {
     assert(client);
-    LOG_I("client {} quit.", client->GetFd());
-    if (!_epoller->DelFd(client->GetFd())) {
-        LOG_E("Failed to delete client fd {}!", client->GetFd());
+    int fd = client->GetFd();
+    LOG_I("client {} quit.", fd);
+
+    // 1. 先从定时器映射中删除该fd关联的定时器
+    if (_timeoutMS > 0) {
+        try {
+            HeapTimerManager::GetInstance().CancelByKey(fd);
+        } catch (const std::exception& e) {
+            LOG_E("Exception when canceling timer for fd {}: {}", fd, e.what());
+        } catch (...) {
+            LOG_E("Unknown exception when canceling timer for fd {}", fd);
+        }
     }
+
+    // 2. 从epoll中删除文件描述符
+    if (!_epoller->DelFd(fd)) {
+        LOG_E("Failed to delete client fd {}!", fd);
+    }
+
+    // 3. 关闭连接
     client->Close();
+
+    // 4. 从_users映射中删除此连接
+    // 由于closeConn是const方法，需要进行const_cast来修改_users
+    auto& users = const_cast<std::unordered_map<int, http::Conn>&>(_users);
+    users.erase(fd);
 }
 
 void Server::addClient(int fd, const sockaddr_in& addr) {
@@ -200,8 +319,12 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
     _users[fd].init(fd, addr);
     if (_timeoutMS > 0) {
 #ifdef __V0
-        _timer->Add(fd, _timeoutMS,
-                    [this, capture0 = &_users[fd]] { closeConn(capture0); });
+        HeapTimerManager::GetInstance().ScheduleWithKey(
+            fd, _timeoutMS, 0, [this, fd]() {
+                if (_users.count(fd) > 0) {
+                    closeConn(&_users[fd]);
+                }
+            });
 #elif
 // TODO
 #endif // !__V0
@@ -254,11 +377,19 @@ void Server::extentTime(http::Conn* client) const {
     assert(client);
 #ifdef __V0
     if (_timeoutMS > 0) {
-        _timer->Adjust(client->GetFd(), _timeoutMS);
+        // 使用ScheduleWithKey，确保每个文件描述符只有一个定时器
+        HeapTimerManager::GetInstance().ScheduleWithKey(
+            client->GetFd(), _timeoutMS, 0, [this, fd = client->GetFd()]() {
+                // 由于lambda可能在Server对象销毁后执行，需要安全处理
+                if (!_isClose && _users.count(fd) > 0) {
+                    const_cast<Server*>(this)->closeConn(
+                        &const_cast<Server*>(this)->_users[fd]);
+                }
+            });
+    }
 #elif
 // TODO timer 替换
 #endif // __V0
-    }
 }
 
 // 干什么用？
@@ -386,7 +517,6 @@ std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath) {
         LOG_E("Failed to initialize config from {}", configPath);
         return nullptr;
     }
-
     // TODO 更改 config 的接口，获取的时候通过不同函数直接转换为 int 或者 uint
     // strtol 是 C 语言标准库中的一个函数，用于将字符串转换为长整型（long
     // int）数值
@@ -404,7 +534,7 @@ std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath) {
     auto server = std::make_unique<v0::Server>(
         appPort, trig, timeout, false, sqlPort, sqlUser.c_str(),
         sqlPassword.c_str(), database.c_str(), 12, 6, true, 1, 1024);
-
+    assert(server);
     return server;
 }
 

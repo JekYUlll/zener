@@ -6,6 +6,11 @@
 #include <iostream>
 #include <thread>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunknown-pragmas"
+#pragma clang diagnostic ignored "-Wunused-lambda-capture"
+
+
 namespace fs = std::filesystem;
 static auto log_path = "logs";
 
@@ -53,7 +58,7 @@ int main() {
 
     // 测试持续打印
     int count = 0;
-    auto start = std::chrono::steady_clock::now();
+    const auto start = std::chrono::steady_clock::now();
 
     while (true) {
         auto now = std::chrono::steady_clock::now();
@@ -76,3 +81,5 @@ int main() {
     LOG_I("测试完成，共打印 {} 条持续日志", count);
     return EXIT_SUCCESS;
 }
+
+#pragma clang diagnostic pop
