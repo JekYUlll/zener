@@ -8,8 +8,10 @@ file(GLOB_RECURSE SERVER_SOURCES
     "${CMAKE_SOURCE_DIR}/src/database/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/file/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/http/*.cpp"
+
     "${CMAKE_SOURCE_DIR}/src/task/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/task/timer/*.cpp"
+
     "${CMAKE_SOURCE_DIR}/src/utils/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/utils/log/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/utils/error/*.cpp"

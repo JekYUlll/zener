@@ -28,11 +28,12 @@ bool Config::read(std::string const& filename) {
         return false;
     }
     // 莫名其妙 config.toml 没权限了导致失败，增加权限的判断和修改 --2025/02/24
-    if (auto perms = fs::status(filename).permissions(); (perms & fs::perms::owner_read) == fs::perms::none) {
-        LOG_W("Config file {} lacks read permission, attempting to add...", filename);
+    if (auto perms = fs::status(filename).permissions();
+        (perms & fs::perms::owner_read) == fs::perms::none) {
+        LOG_W("Config file {} lacks read permission, attempting to add...",
+              filename);
         try {
-            permissions(filename, fs::perms::owner_read,
-                            fs::perm_options::add);
+            permissions(filename, fs::perms::owner_read, fs::perm_options::add);
         } catch (const fs::filesystem_error& e) {
             LOG_E("Failed to add read permission: {}.", e.what());
             return false;
@@ -56,14 +57,16 @@ bool Config::read(std::string const& filename) {
             continue;
         }
         std::istringstream iss(line);
-        if (std::string key, value; std::getline(iss, key, '=') && std::getline(iss, value)) {
+        if (std::string key, value;
+            std::getline(iss, key, '=') && std::getline(iss, value)) {
             key.erase(0, key.find_first_not_of(" \t"));
             key.erase(key.find_last_not_of(" \t") + 1);
             value.erase(0, value.find_first_not_of(" \t"));
             value.erase(value.find_last_not_of(" \t") + 1);
             if (!currentSection.empty()) { // 如果在某个节中，添加节名作为前缀
                 /* 等价于：
-                    key = currentSection + "." + key; // 一点蚊子腿性能优化，减少临时对象
+                    key = currentSection + "." + key; //
+                   一点蚊子腿性能优化，减少临时对象
                 */
                 std::string originalKey(std::move(key));
                 key.reserve(currentSection.size() + 1 + originalKey.size());
@@ -71,7 +74,8 @@ bool Config::read(std::string const& filename) {
                 key.append(".");
                 key.append(originalKey);
             }
-            if (size_t commentPos = value.find('#'); commentPos != std::string::npos) { // 移除注释
+            if (size_t commentPos = value.find('#');
+                commentPos != std::string::npos) { // 移除注释
                 value = value.substr(0, commentPos);
                 value.erase(value.find_last_not_of(" \t") + 1);
             }
