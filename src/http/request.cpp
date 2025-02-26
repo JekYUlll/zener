@@ -40,7 +40,6 @@ bool Request::parse(Buffer& buff) {
     while (buff.ReadableBytes() && state_ != FINISH) {
         const char* lineEnd =
             std::search(buff.Peek(), buff.BeginWrite(), CRLF, CRLF + 2);
-        // 因为const实现不同，此处进行兼容，强行调用 const 版本的 Peek()
         const char* peek = buff.Peek();
         std::string line(peek, lineEnd);
         switch (state_) {

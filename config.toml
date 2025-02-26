@@ -7,7 +7,6 @@ optlinger = false
 [log]
 level = "DEBUG"
 dir = "logs"
-name = "test.log"
 
 [mysql]
 host = "127.0.0.1"
@@ -15,9 +14,13 @@ port = 3306
 user = "root"
 password = "root"
 database = "zener_test"
+poolSize = 12           # 数据库连接池的容量
 
 [redis]
 host = "127.0.0.1"
 port = 6379
-password = "donotpanic"
+password = "root"
 db = 0
+
+[thread]
+poolSize = 6 # 线程池的并行数

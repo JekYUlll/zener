@@ -24,7 +24,7 @@ bool Config::read(std::string const& filename) {
     namespace fs = std::filesystem;
     // 检查文件是否存在
     if (!fs::exists(filename)) {
-        LOG_E("Config file does not exist: {}.", filename);
+        LOG_E("Config file does not exist: {}!", filename);
         return false;
     }
     // 莫名其妙 config.toml 没权限了导致失败，增加权限的判断和修改 --2025/02/24
@@ -35,13 +35,13 @@ bool Config::read(std::string const& filename) {
         try {
             permissions(filename, fs::perms::owner_read, fs::perm_options::add);
         } catch (const fs::filesystem_error& e) {
-            LOG_E("Failed to add read permission: {}.", e.what());
+            LOG_E("Failed to add read permission: {}!", e.what());
             return false;
         }
     }
     std::ifstream file(filename);
     if (!file.is_open()) {
-        LOG_E("Failed to open config file: {}.", filename);
+        LOG_E("Failed to open config file: {}!", filename);
         return false;
     }
     std::string line;
@@ -94,7 +94,7 @@ bool Config::Init(const std::string& configPath) {
         return true;
     }
     if (!read(configPath)) {
-        LOG_E("Failed to read config file: {}.", configPath);
+        LOG_E("Failed to read config file: {}!", configPath);
         return false;
     }
     // 如果需要在初始化的时候直接进行判断和赋值。暂时不需要
@@ -118,7 +118,7 @@ bool Config::Init(const std::string& configPath) {
 
 void Config::Print() {
     if (!Initialized()) {
-        LOG_W("Should init before {}.", __FUNCTION__);
+        LOG_W("Should init config before {}!", __FUNCTION__);
         return;
     }
     LOG_I("===================== Config Loaded =====================");
@@ -131,13 +131,13 @@ void Config::Print() {
 const std::string& Config::GetConfig(const std::string& key) {
     static const std::string empty;
     if (!Initialized()) {
-        LOG_W("Should init before {}", __FUNCTION__);
+        LOG_W("Should init config before {}!", __FUNCTION__);
         return empty;
     }
     if (const auto it = _configMap.find(key); it != _configMap.end()) {
         return it->second;
     }
-    LOG_W("Config '{}' not found.", key);
+    LOG_W("Config '{}' not found!", key);
     return empty;
 }
 

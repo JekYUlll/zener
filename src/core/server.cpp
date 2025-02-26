@@ -27,9 +27,10 @@ namespace zener {
 namespace v0 {
 
 Server::Server(int port, const int trigMode, const int timeoutMS,
-               const bool optLinger, const int sqlPort, const char* sqlUser,
-               const char* sqlPwd, const char* dbName, int connPoolNum,
-               int threadNum, bool openLog, int logLevel, int logQueSize)
+               const bool optLinger, const char* sqlHost, const int sqlPort,
+               const char* sqlUser, const char* sqlPwd, const char* dbName,
+               int connPoolNum, int threadNum, bool openLog, int logLevel,
+               int logQueSize)
     : _port(port), _openLinger(optLinger), _timeoutMS(timeoutMS),
       _isClose(false), _threadpool(new ThreadPool(threadNum)),
       _epoller(new Epoller()) {
@@ -52,7 +53,7 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     http::Conn::staticDir = _staticDir.c_str(); // 似乎不太安全？不过 _staticDir
                                                 // 之后不会修改了，理论上没问题
 
-    db::SqlConnector::GetInstance().Init("localhost", sqlPort, sqlUser, dbName,
+    db::SqlConnector::GetInstance().Init(sqlHost, sqlPort, sqlUser, sqlPwd,
                                          dbName, connPoolNum);
 
     initEventMode(trigMode);
@@ -73,14 +74,15 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
         return;
     }
     LOG_I("Server Init ===========================>");
-    LOG_I("port: {0}, OpenLinger: {1}", port, optLinger ? "true" : "false");
-    LOG_I("Listen Mode: {0}, OpenConn Mode: {1}",
+    LOG_I("| port: {0}, OpenLinger: {1}", port, optLinger ? "true" : "false");
+    LOG_I("| Listen Mode: {0}, OpenConn Mode: {1}",
           (_listenEvent & EPOLLET ? "ET" : "LT"),
           (_connEvent & EPOLLET ? "ET" : "LT"));
-    LOG_I("Log level: {}", logLevel);
-    LOG_I("static Dir: {}", http::Conn::staticDir);
-    LOG_I("SqlConnPool num: {0}, ThreadPool num: {1}", connPoolNum, threadNum);
-    LOG_I("TimerManager: {}", TIMER_MANAGER_TYPE);
+    LOG_I("| Log level: {}", logLevel);
+    LOG_I("| static path: {}", http::Conn::staticDir);
+    LOG_I("| SqlConnPool num: {0}, ThreadPool num: {1}", connPoolNum,
+          threadNum);
+    LOG_I("| TimerManager: {}", TIMER_MANAGER_TYPE);
 }
 
 Server::~Server() {
@@ -476,26 +478,28 @@ int Server::setFdNonblock(const int fd) {
 
 std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath) {
     if (!Config::Init(configPath)) {
-        LOG_E("Failed to initialize config from {}", configPath);
+        LOG_E("Failed to initialize config from {}!", configPath);
         return nullptr;
     }
-    // TODO 更改 config 的接口，获取的时候通过不同函数直接转换为 int 或者 uint
-    // strtol 是 C 语言标准库中的一个函数，用于将字符串转换为长整型（long
-    // int）数值
+
     const auto appPort =
         static_cast<unsigned int>(atoi(zener::GET_CONFIG("app.port").c_str()));
     const auto trig = atoi(zener::GET_CONFIG("app.trig").c_str());
     const auto timeout = atoi(zener::GET_CONFIG("app.timeout").c_str());
-    const auto host = zener::GET_CONFIG("mysql.host");
+    const auto sqlHost = zener::GET_CONFIG("mysql.host").c_str();
     const auto sqlPort = static_cast<unsigned int>(
         atoi(zener::GET_CONFIG("mysql.port").c_str()));
     const auto sqlUser = zener::GET_CONFIG("mysql.user");
     const auto sqlPassword = zener::GET_CONFIG("mysql.password");
     const auto database = zener::GET_CONFIG("mysql.database");
+    const auto sqlPoolSize = atoi(zener::GET_CONFIG("mysql.poolSize").c_str());
+    const auto threadPoolSize =
+        atoi(zener::GET_CONFIG("thread.poolSize").c_str());
 
     auto server = std::make_unique<v0::Server>(
-        appPort, trig, timeout, false, sqlPort, sqlUser.c_str(),
-        sqlPassword.c_str(), database.c_str(), 12, 6, true, 1, 1024);
+        appPort, trig, timeout, false, sqlHost, sqlPort, sqlUser.c_str(),
+        sqlPassword.c_str(), database.c_str(), sqlPoolSize, threadPoolSize,
+        true);
     assert(server);
     return server;
 }
