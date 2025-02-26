@@ -4,7 +4,6 @@
 #include "database/sql_connector.h"
 #include "http/conn.h"
 #include "task/threadpool_1.h"
-#include "task/timer/maptimer.h"
 #include "task/timer/timer.h"
 #include "utils/log/logger.h"
 
@@ -70,7 +69,7 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     const auto logDir = GET_CONFIG("log.dir");   // logs
     const std::string fullLogDir = _cwd + "/" + logDir;
     if (!Logger::WriteToFile(fullLogDir)) {
-        LOG_E("Failed to create log file in directory: {}", fullLogDir);
+        LOG_E("Failed to create log file in directory: {}!", fullLogDir);
         return;
     }
     LOG_I("Server Init ===========================>");
@@ -81,6 +80,7 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     LOG_I("Log level: {}", logLevel);
     LOG_I("static Dir: {}", http::Conn::staticDir);
     LOG_I("SqlConnPool num: {0}, ThreadPool num: {1}", connPoolNum, threadNum);
+    LOG_I("TimerManager: {}", TIMER_MANAGER_TYPE);
 }
 
 Server::~Server() {

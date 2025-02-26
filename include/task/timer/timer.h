@@ -4,14 +4,12 @@
 namespace zener {
 
 #ifdef __USE_MAPTIMER
-namespace rbtimer {
-class TimerManager; // 使用前向声明，隔离依赖（虽说这个案例里也没隔离啥）
-}
+#define TIMER_MANAGER_TYPE "map"
+#include "task/timer/maptimer.h"
 using TimerManagerImpl = rbtimer::TimerManager;
 #else  // __USE_MAPTIMER
-namespace vo {
-class TimerManager;
-}
+#define TIMER_MANAGER_TYPE "heap"
+#include "task/timer/heaptimer.h"
 using TimerManagerImpl = v0::HeapTimerManager;
 #endif // !__USE_MAPTIMER
 
