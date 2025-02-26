@@ -4,8 +4,8 @@
 #include "buffer/buffer.h"
 
 #include <string>
+#include <sys/stat.h>
 #include <unordered_map>
-
 
 namespace zener::http {
 
@@ -15,7 +15,7 @@ class Response {
     ~Response();
 
     void Init(const std::string& srcDir, const std::string& path,
-              bool isKeepAlive = false, int code = -1);
+              bool isKeepAlive, int code);
     void MakeResponse(Buffer& buff);
     void UnmapFile();
     void ErrorContent(Buffer& buff, const std::string& message) const;
@@ -37,6 +37,7 @@ class Response {
     bool _isKeepAlive;
     std::string _path;
     std::string _srcDir;
+    std::string _cachedFilePath;
     char* _file;
     struct stat _fileStat{};
 
@@ -71,6 +72,5 @@ class Response {
 // };
 
 } // namespace zener::http
-
 
 #endif // !ZENER_HTTP_RESPONSE_H

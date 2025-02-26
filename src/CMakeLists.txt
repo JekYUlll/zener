@@ -8,6 +8,7 @@ set(CORE_SOURCES
     database/sql_connector.cpp
     file/file.cpp
     http/conn.cpp
+    http/file_cache.cpp
     http/request.cpp
     http/response.cpp
     task/threadpool.cpp

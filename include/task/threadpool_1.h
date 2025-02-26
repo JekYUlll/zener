@@ -6,8 +6,10 @@
  */
 
 #include <cassert>
+#include <chrono>
 #include <condition_variable>
 #include <functional>
+#include <iostream>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -63,6 +65,76 @@ class ThreadPool {
             _pool->tasks.emplace(std::forward<F>(task));
         }
         _pool->cond.notify_one();
+    }
+
+    // 安全关闭线程池，等待所有任务完成
+    void Shutdown(int timeoutMS = 1000) {
+        if (!_pool) {
+            return;
+        }
+
+        std::cout << "线程池: 开始关闭..." << std::endl;
+
+        // 等待任务队列清空
+        auto startTime = std::chrono::high_resolution_clock::now();
+        auto timeout = std::chrono::milliseconds(timeoutMS);
+        bool tasksCompleted = false;
+
+        // 等待任务完成或超时
+        int lastTaskCount = -1;
+        int noProgressCount = 0;
+
+        while (!tasksCompleted) {
+            int currentTaskCount = 0;
+            {
+                std::lock_guard<std::mutex> locker(_pool->mtx);
+                currentTaskCount = _pool->tasks.size();
+                tasksCompleted = currentTaskCount == 0;
+
+                // 检测任务队列是否还在处理，如果队列大小相同超过5次检查，
+                // 认为处理可能已经停滞，强制结束等待
+                if (currentTaskCount == lastTaskCount) {
+                    noProgressCount++;
+                    if (noProgressCount > 5) {
+                        std::cout << "线程池: 任务队列停滞，剩余"
+                                  << currentTaskCount
+                                  << "个任务未处理，强制关闭" << std::endl;
+                        break;
+                    }
+                } else {
+                    lastTaskCount = currentTaskCount;
+                    noProgressCount = 0;
+                }
+            }
+
+            if (tasksCompleted) {
+                std::cout << "线程池: 所有任务已完成" << std::endl;
+                break;
+            }
+
+            // 检查是否超时
+            auto now = std::chrono::high_resolution_clock::now();
+            auto elapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - startTime);
+            if (elapsed >= timeout) {
+                std::cout << "线程池: 关闭超时，剩余" << lastTaskCount
+                          << "个任务未处理" << std::endl;
+                break;
+            }
+
+            // 短暂休眠后继续检查，更频繁地检查以便快速响应
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+
+        // 关闭线程池
+        {
+            std::lock_guard<std::mutex> locker(_pool->mtx);
+            _pool->isClosed = true;
+            std::cout << "线程池: 设置关闭标志" << std::endl;
+        }
+        _pool->cond.notify_all();
+        std::cout << "线程池: 已通知所有工作线程" << std::endl;
     }
 
     // 改进：支持有返回值的任务

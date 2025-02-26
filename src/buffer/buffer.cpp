@@ -14,44 +14,54 @@ Buffer::Buffer(size_t size)
     // _prePos(INIT_PREPEND_SIZE)
 }
 
-Buffer::Buffer(Buffer&& other) noexcept
-    : _buffer(std::move(other._buffer)), _readPos(other._readPos.load()),
-      _writePos(other._writePos.load()) {
-    // , _prePos(other._prePos.load())
-    bzero(&other._buffer[0], other._buffer.size());
-    other._readPos = 0;
-    other._writePos = 0;
-    // other._prePos = 0;
+Buffer::Buffer(Buffer&& other) noexcept : _buffer(std::move(other._buffer)) {
+    // 使用原子操作来安全地设置值
+    _readPos.store(other._readPos.load(std::memory_order_acquire),
+                   std::memory_order_release);
+    _writePos.store(other._writePos.load(std::memory_order_acquire),
+                    std::memory_order_release);
+
+    // 重置other的状态
+    other._readPos.store(0, std::memory_order_release);
+    other._writePos.store(0, std::memory_order_release);
+    // 注意：不要对已移动的other._buffer进行bzero操作，因为它现在是一个空vector
 }
 
 Buffer& Buffer::operator=(Buffer&& other) noexcept {
     if (this != &other) {
         _buffer = std::move(other._buffer);
-        bzero(&other._buffer[0], other._buffer.size());
-        _readPos = other._readPos.load();
-        _writePos = other._writePos.load();
-        // _prePos = other._prePos.load();
-        other._readPos = 0;
-        other._writePos = 0;
-        // other._prePos = 0;
+        // 使用原子操作来安全地设置值
+        _readPos.store(other._readPos.load(std::memory_order_acquire),
+                       std::memory_order_release);
+        _writePos.store(other._writePos.load(std::memory_order_acquire),
+                        std::memory_order_release);
+
+        // 重置other的状态
+        other._readPos.store(0, std::memory_order_release);
+        other._writePos.store(0, std::memory_order_release);
+        // 注意：不要对已移动的other._buffer进行bzero操作
     }
     return *this;
 }
 
 void Buffer::Retrieve(std::size_t len) {
     assert(len <= ReadableBytes());
-    _readPos += len;
+    size_t newPos = _readPos.load(std::memory_order_acquire) + len;
+    _readPos.store(newPos, std::memory_order_release);
 }
 
 void Buffer::RetrieveUntil(const char* end) {
     assert(Peek() <= end);
     Retrieve(end - Peek());
 }
+
 // Clear
 void Buffer::RetrieveAll() {
-    bzero(&_buffer[0], _buffer.size());
-    _readPos = 0;
-    _writePos = 0;
+    if (!_buffer.empty()) {
+        bzero(&_buffer[0], _buffer.size());
+    }
+    _readPos.store(0, std::memory_order_release);
+    _writePos.store(0, std::memory_order_release);
 }
 
 std::string Buffer::RetrieveAllToString() {
@@ -104,27 +114,76 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
     4. muduo
     的解决方案：将读取分散在两块区域，一块是`buffer`，一块是栈上的`extraBuf`（放置在栈上使得`extraBuf`随着`Read`的结束而释放，不会占用额外空间），当初始的小`buffer`放不下时才扩容
     */
-    char extraBuff[65535];
+
+    // 使用固定大小的栈上缓冲区，减小栈上内存使用
+    constexpr size_t EXTRA_BUF_SIZE = 8192; // 减小到8KB以降低栈内存使用
+    char extraBuff[EXTRA_BUF_SIZE];
+
     // struct iovec 用于进行分散 - 聚集 I/O（Scatter - Gather I/O）操作。
     // 允许程序在一次系统调用中从多个缓冲区读取数据（聚集）或向多个缓冲区写入数据（分散）
     struct iovec iov[2];
     const size_t writable = WritableBytes();
+
+    // 检查 Buffer 是否有可写空间
+    if (writable == 0) {
+        // 如果 Buffer 已满，扩容后再读取
+        try {
+            EnsureWritable(INIT_BUFFER_SIZE);
+        } catch (const std::exception& e) {
+            if (saveErrno) {
+                *saveErrno = ENOMEM;
+            }
+            LOG_E("Buffer::ReadFd - 内存分配失败: {}", e.what());
+            return -1;
+        }
+    }
+
     // 分散读，保证数据读完
     iov[0].iov_base = GetWritePtr(); // 第一块指向 _buffer 里的 write_pos
     iov[0].iov_len = writable;
     iov[1].iov_base = extraBuff; // 第二块指向栈上的 extraBuff
-    iov[1].iov_len = sizeof(extraBuff);
-    // 判断需要写入几个缓冲区 *
-    const int iovCnt = writable < sizeof(extraBuff) ? 2 : 1;
+    iov[1].iov_len = EXTRA_BUF_SIZE;
+
+    // 判断需要写入几个缓冲区
+    const int iovCnt = (writable < EXTRA_BUF_SIZE) ? 2 : 1;
     const ssize_t len = readv(fd, iov, iovCnt);
+
     if (len < 0) {
-        *saveErrno = errno;
+        if (saveErrno) {
+            *saveErrno = errno;
+        }
+    } else if (len == 0) {
+        // 连接已关闭，不做任何处理
     } else if (static_cast<size_t>(len) <= writable) {
-        _writePos += len;
+        // 数据完全写入第一个缓冲区，使用原子操作更新写位置
+        size_t newPos = _writePos.load(std::memory_order_acquire) + len;
+        _writePos.store(newPos, std::memory_order_release);
     } else {
-        _writePos = _buffer.size();
-        Append(extraBuff, len - writable);
+        // 数据部分写入第一个缓冲区，部分写入第二个缓冲区
+        // 先将第一个缓冲区填满，使用原子操作
+        _writePos.store(_buffer.size(), std::memory_order_release);
+
+        // 计算写入第二个缓冲区的数据量
+        size_t extraLen = len - writable;
+
+        // 确保不超出 extraBuff 的大小
+        if (extraLen > EXTRA_BUF_SIZE) {
+            LOG_W("Buffer::ReadFd - extraBuff溢出，截断数据");
+            extraLen = EXTRA_BUF_SIZE;
+        }
+
+        // 将第二个缓冲区的数据追加到 Buffer 中
+        try {
+            Append(extraBuff, extraLen);
+        } catch (const std::exception& e) {
+            // 如果追加数据时发生异常，记录错误但不中断处理
+            LOG_E("Buffer::ReadFd - 追加extraBuff数据失败: {}", e.what());
+            if (saveErrno) {
+                *saveErrno = ENOBUFS; // 缓冲区空间不足
+            }
+        }
     }
+
     return len;
 }
 
@@ -132,10 +191,16 @@ ssize_t Buffer::WriteFd(const int fd, int* saveErrno) {
     const size_t readSize = ReadableBytes();
     const ssize_t len = write(fd, Peek(), readSize);
     if (len < 0) {
-        *saveErrno = errno;
+        if (saveErrno) {
+            *saveErrno = errno;
+        }
         return len;
     }
-    _readPos += len;
+
+    // 更新读位置，使用原子操作
+    size_t newPos = _readPos.load(std::memory_order_acquire) + len;
+    _readPos.store(newPos, std::memory_order_release);
+
     return len;
 }
 
@@ -147,17 +212,38 @@ void Buffer::makeSpace(const size_t len) {
     bytes移动到前面prePos处。
     2.如果第一种方案的空间仍然不够，那么就直接对buffer扩容
     */
-    if (WritableBytes() + PrependableBytes() < len) {
-        if (_writePos > std::numeric_limits<size_t>::max() - len - 1) {
-            throw std::overflow_error("Buffer overflow");
+    try {
+        // 获取当前位置的原子快照，确保线程安全
+        size_t currentReadPos = _readPos.load(std::memory_order_acquire);
+        size_t currentWritePos = _writePos.load(std::memory_order_acquire);
+
+        if (WritableBytes() + PrependableBytes() < len) {
+            // 检查整数溢出
+            if (currentWritePos >
+                std::numeric_limits<size_t>::max() - len - 1) {
+                throw std::overflow_error("Buffer overflow");
+            }
+            _buffer.resize(currentWritePos + len + 1);
+        } else {
+            // 将已读数据丢弃，将未读数据前移
+            const size_t readable = ReadableBytes();
+            std::copy(beginPtr() + currentReadPos, beginPtr() + currentWritePos,
+                      beginPtr());
+
+            // 更新位置指针，使用原子操作
+            _readPos.store(0, std::memory_order_release);
+            _writePos.store(readable, std::memory_order_release);
+
+            assert(readable == ReadableBytes());
         }
-        _buffer.resize(_writePos + len + 1);
-    } else {
-        const size_t readable = ReadableBytes();
-        std::copy(beginPtr() + _readPos, beginPtr() + _writePos, beginPtr());
-        _readPos = 0;
-        _writePos = _readPos + readable;
-        assert(readable == ReadableBytes());
+    } catch (const std::bad_alloc& e) {
+        // 处理内存分配失败
+        LOG_E("Buffer::makeSpace - 内存分配失败: {}", e.what());
+        throw; // 重新抛出异常，让调用者处理
+    } catch (const std::exception& e) {
+        // 处理其他异常
+        LOG_E("Buffer::makeSpace - 异常: {}", e.what());
+        throw; // 重新抛出异常，让调用者处理
     }
 }
 

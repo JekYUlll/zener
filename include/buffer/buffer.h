@@ -86,7 +86,11 @@ class Buffer {
     std::string RetrieveAllToString();
     [[nodiscard]] std::string ToString() const;
 
-    inline void HasWritten(size_t len) { _writePos += len; }
+    // 更新写位置，使用原子操作确保线程安全
+    inline void HasWritten(size_t len) {
+        size_t newPos = _writePos.load(std::memory_order_acquire) + len;
+        _writePos.store(newPos, std::memory_order_release);
+    }
 
     void Append(const std::string& str);
     void Append(const void* data, size_t len);

@@ -89,17 +89,43 @@ class TimerManager final : public ITimerManager {
         if (const auto it = _keyToTimerId.find(key);
             it != _keyToTimerId.end()) {
             const int timerId = it->second;
-            // 直接访问HeapTimer的私有成员
-            if (_timer._ref.count(timerId) > 0) {
-                if (const size_t index = _timer._ref[timerId];
-                    index < _timer._heap.size()) {
-                    _timer.del(index);
+            LOG_D("定时器：通过业务key={}取消定时器id={}", key, timerId);
+
+            try {
+                // 直接访问HeapTimer的私有成员
+                if (_timer._ref.count(timerId) > 0) {
+                    if (const size_t index = _timer._ref[timerId];
+                        index < _timer._heap.size()) {
+                        LOG_D("定时器：删除节点index={}", index);
+                        _timer.del(index);
+                    } else {
+                        LOG_W("定时器：索引越界，无法删除节点 index={}, "
+                              "堆大小={}",
+                              index, _timer._heap.size());
+                    }
+                } else {
+                    LOG_W("定时器：找不到定时器ID={}", timerId);
                 }
+
+                // 从重复记录中删除
+                _repeats.erase(timerId);
+
+                // 从映射中删除
+                _keyToTimerId.erase(it);
+            } catch (const std::exception& e) {
+                LOG_E("定时器：取消定时器异常 key={}, id={}, 错误={}", key,
+                      timerId, e.what());
+                // 尝试清理资源
+                _repeats.erase(timerId);
+                _keyToTimerId.erase(key);
+            } catch (...) {
+                LOG_E("定时器：取消定时器未知异常 key={}, id={}", key, timerId);
+                // 尝试清理资源
+                _repeats.erase(timerId);
+                _keyToTimerId.erase(key);
             }
-            // 从重复记录中删除
-            _repeats.erase(timerId);
-            // 从映射中删除
-            _keyToTimerId.erase(it);
+        } else {
+            LOG_D("定时器：无效的业务key={}", key);
         }
     }
 

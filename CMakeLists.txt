@@ -66,13 +66,16 @@ elseif(MSVC)
 endif()
 
 # 定时器实现选择 - 使用单一选项更便于管理
-set(TIMER_IMPLEMENTATION "HEAP" CACHE STRING "Timer implementation to use (MAP or HEAP)")
+set(TIMER_IMPLEMENTATION "MAP" CACHE STRING "Timer implementation to use (MAP or HEAP)")
 set_property(CACHE TIMER_IMPLEMENTATION PROPERTY STRINGS "MAP" "HEAP")
 
+# 根据定时器实现设置可执行文件名称后缀
 if(TIMER_IMPLEMENTATION STREQUAL "MAP")
     add_definitions(-D__USE_MAPTIMER)
+    set(TIMER_SUFFIX "-map")
     message(STATUS "Using map-based timer implementation (红黑树定时器)")
 else()
+    set(TIMER_SUFFIX "-heap")
     message(STATUS "Using heap-based timer implementation (堆定时器)")
 endif()
 
@@ -94,9 +97,9 @@ include_directories(${MYSQL_INCLUDE_DIRS})
 # 添加子目录 收集了 CORE_SOURCES
 add_subdirectory(src)
 
-# 主服务器可执行文件
-add_executable(Zener cmd/server/main.cpp)
-target_link_libraries(Zener PRIVATE
+# 主服务器可执行文件 - 修改为使用后缀
+add_executable(Zener${TIMER_SUFFIX} cmd/server/main.cpp)
+target_link_libraries(Zener${TIMER_SUFFIX} PRIVATE
     zener_core
     PkgConfig::MYSQL
 )
@@ -113,8 +116,8 @@ endfunction()
 add_zener_test(log_test)
 add_zener_test(hardware_test)
 
-# 完善安装规则
-install(TARGETS Zener
+# 完善安装规则 - 也需要修改
+install(TARGETS Zener${TIMER_SUFFIX}
     RUNTIME DESTINATION bin
     BUNDLE DESTINATION bin
 )

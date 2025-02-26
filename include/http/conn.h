@@ -13,6 +13,7 @@
 #include "http/response.h"
 
 #include <arpa/inet.h> // sockaddr_in
+#include <cstdint>     // uint64_t
 #include <cstdlib>     // atoi()
 #include <sys/types.h>
 #include <sys/uio.h> // readv/writev
@@ -29,6 +30,12 @@ class Conn {
     ~Conn();
 
     void init(int sockFd, const sockaddr_in& addr);
+
+    // 设置连接ID
+    void SetConnId(uint64_t id) { _connId = id; }
+
+    // 获取连接ID
+    uint64_t GetConnId() const { return _connId; }
 
     void Close();
 
@@ -64,7 +71,7 @@ class Conn {
   private:
     int _fd;
     struct sockaddr_in _addr;
-
+    uint64_t _connId; // 连接唯一标识符
     bool _isClose;
 
     int _iovCnt;

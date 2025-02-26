@@ -1,9 +1,10 @@
 #include "http/response.h"
+#include "http/file_cache.h"
 #include "utils/log/logger.h"
 
 #include <fcntl.h>
+#include <string.h>
 #include <sys/mman.h>
-
 
 namespace zener::http {
 
@@ -50,12 +51,13 @@ Response::Response() {
     _isKeepAlive = false;
     _file = nullptr;
     _fileStat = {0};
+    _cachedFilePath = "";
 };
 
 Response::~Response() { UnmapFile(); }
 
-void Response::Init(const string& srcDir, const string& path, const bool isKeepAlive,
-                    const int code) {
+void Response::Init(const string& srcDir, const string& path,
+                    const bool isKeepAlive, const int code) {
     assert(!srcDir.empty());
     if (_file) {
         UnmapFile();
@@ -66,6 +68,7 @@ void Response::Init(const string& srcDir, const string& path, const bool isKeepA
     _srcDir = srcDir;
     _file = nullptr;
     _fileStat = {0};
+    _cachedFilePath = "";
 }
 
 void Response::MakeResponse(Buffer& buff) {
@@ -118,30 +121,60 @@ void Response::addHeader(Buffer& buff) const {
 }
 
 void Response::addContent(Buffer& buff) {
-    const int srcFd = open((_srcDir + _path).data(), O_RDONLY);
-    if (srcFd < 0) {
+    const string fullPath = _srcDir + _path;
+
+    // 打开文件前先记录当前路径，以便后续释放
+    _cachedFilePath = fullPath;
+
+    LOG_D("文件路径: {}, 大小: {}", fullPath.c_str(), _fileStat.st_size);
+
+    if (_fileStat.st_size <= 0) {
+        LOG_W("文件大小为0或负数: {}", fullPath.c_str());
+        buff.Append("Content-length: 0\r\n\r\n");
+        return;
+    }
+
+    // 使用文件缓存获取文件映射
+    auto cachedFile =
+        FileCache::GetInstance().GetFileMapping(fullPath, _fileStat);
+    if (!cachedFile) {
+        LOG_E("获取文件映射失败: {}", fullPath.c_str());
         ErrorContent(buff, "File NotFound!");
         return;
     }
-    /* 将文件映射到内存提高文件的访问速度
-        MAP_PRIVATE 建立一个写入时拷贝的私有映射*/
-    LOG_D("file path {}", (_srcDir + _path).data());
-    const auto mmRet =
-        static_cast<int *>(mmap(nullptr, _fileStat.st_size, PROT_READ, MAP_PRIVATE, srcFd, 0));
-    if (*mmRet == -1) {
-        ErrorContent(buff, "File NotFound!");
-        return;
-    }
-    _file = reinterpret_cast<char *>(mmRet);
-    close(srcFd);
-    buff.Append("Content-length: " + to_string(_fileStat.st_size) +
-                "\r\n\r\n");
+
+    // 设置文件指针和大小
+    _file = cachedFile->data;
+
+    buff.Append("Content-length: " + to_string(_fileStat.st_size) + "\r\n\r\n");
+
+    LOG_D("文件成功映射到内存: 地址={:p}, 大小={}, 使用缓存: {}", (void*)_file,
+          _fileStat.st_size, !_cachedFilePath.empty());
 }
 
 void Response::UnmapFile() {
     if (_file) {
-        munmap(_file, _fileStat.st_size);
+        // 记录当前文件信息用于日志
+        void* filePtr = _file;
+        std::string cachedPath = _cachedFilePath;
+
+        if (!_cachedFilePath.empty()) {
+            // 不直接调用munmap，而是通过缓存系统释放引用
+            try {
+                LOG_D("释放文件映射: 文件={}, 地址={:p}", _cachedFilePath,
+                      (void*)_file);
+                FileCache::GetInstance().ReleaseFileMapping(_cachedFilePath);
+            } catch (const std::exception& e) {
+                LOG_E("释放文件映射时发生异常: {}, 文件={}", e.what(),
+                      _cachedFilePath);
+            }
+        } else {
+            LOG_W("尝试释放无效的文件映射，地址={:p}", (void*)_file);
+        }
+
+        // 重置状态
         _file = nullptr;
+        _cachedFilePath = "";
     }
 }
 
@@ -151,7 +184,8 @@ string Response::getFileType() const {
     if (idx == string::npos) {
         return "text/plain";
     }
-    if (const string suffix = _path.substr(idx); SUFFIX_TYPE.count(suffix) == 1) {
+    if (const string suffix = _path.substr(idx);
+        SUFFIX_TYPE.count(suffix) == 1) {
         return SUFFIX_TYPE.find(suffix)->second;
     }
     return "text/plain";

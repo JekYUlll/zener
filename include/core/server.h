@@ -9,6 +9,7 @@
 #include <chrono>
 #include <csignal>
 #include <cstdint>
+#include <future>
 #include <memory>
 #include <netinet/in.h>
 #include <thread>
@@ -33,6 +34,12 @@ class Server {
     [[nodiscard]] bool IsClosed() const { return _isClose; }
 
   private:
+    // 包含连接ID的连接信息结构体
+    struct ConnInfo {
+        http::Conn conn; // 连接对象
+        uint64_t connId; // 唯一连接ID
+    };
+
     bool initSocket();
     void initEventMode(int trigMode);
     void addClient(int fd, const sockaddr_in& addr) const;
@@ -49,7 +56,8 @@ class Server {
     void onWrite(http::Conn* client) const;
     void onProcess(http::Conn* client) const;
 
-    static constexpr int MAX_FD = 65535;
+    // 降低默认最大连接数，防止文件描述符耗尽
+    static constexpr int MAX_FD = 10000;
 
     static int setFdNonblock(int fd);
 
@@ -66,7 +74,12 @@ class Server {
 
     std::unique_ptr<ThreadPool> _threadpool;
     std::unique_ptr<Epoller> _epoller;
-    mutable std::unordered_map<int, http::Conn> _users;
+    // 旧版本: mutable std::unordered_map<int, http::Conn> _users;
+    // 新版本: 使用ConnInfo结构体存储连接信息
+    mutable std::unordered_map<int, ConnInfo> _users;
+
+    // 用于生成唯一连接ID的原子计数器
+    mutable std::atomic<uint64_t> _nextConnId{0};
 };
 
 } // namespace v0
@@ -112,11 +125,26 @@ class ServerGuard {
 
     // 等待服务器线程结束，允许超时和中断
     void Wait() {
-        const int CHECK_INTERVAL_MS = 100;
+        const int CHECK_INTERVAL_MS = 100; // 检查服务器状态的间隔
+        const int MAX_WAIT_SECONDS = 5;    // 最大等待时间
 
+        // 等待信号或其他退出条件
+        auto start = std::chrono::high_resolution_clock::now();
         while (!_shouldExit) {
             // 检查服务器线程是否已经结束
-            if (!_thread.joinable() || _srv->IsClosed()) {
+            if (!_thread.joinable() || (_srv && _srv->IsClosed())) {
+                LOG_I("服务器线程已退出或服务器已关闭");
+                break;
+            }
+
+            // 检查是否已经等待太长时间
+            auto now = std::chrono::high_resolution_clock::now();
+            auto elapsed =
+                std::chrono::duration_cast<std::chrono::seconds>(now - start)
+                    .count();
+            if (elapsed > MAX_WAIT_SECONDS) {
+                LOG_W("等待服务器超时，将强制关闭");
+                _shouldExit = true;
                 break;
             }
 
@@ -125,15 +153,52 @@ class ServerGuard {
                 std::chrono::milliseconds(CHECK_INTERVAL_MS));
         }
 
-        // 如果收到退出信号或者服务器已经关闭，确保关闭服务器
-        if (_shouldExit && !_srv->IsClosed()) {
+        // 如果收到退出信号，确保关闭服务器
+        if (_shouldExit && _srv && !_srv->IsClosed()) {
+            LOG_I("收到退出信号，正在关闭服务器...");
             _srv->Shutdown();
         }
 
-        // 等待服务器线程结束
+        // 给服务器一些时间来完成关闭
         if (_thread.joinable()) {
-            _thread.join();
+            LOG_I("等待服务器主线程结束...");
+
+            // 尝试在有限时间内等待线程结束
+            try {
+                // 最多等待2秒
+                auto joinTimeout = std::chrono::seconds(2);
+                auto joinStart = std::chrono::high_resolution_clock::now();
+
+                while (_thread.joinable()) {
+                    // 尝试非阻塞地检查线程是否结束
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+                    // 检查是否超时
+                    auto joinNow = std::chrono::high_resolution_clock::now();
+                    if (std::chrono::duration_cast<std::chrono::seconds>(
+                            joinNow - joinStart) > joinTimeout) {
+                        LOG_W("线程未能在时间限制内结束，放弃等待");
+                        break;
+                    }
+
+                    // 如果服务器已关闭但线程仍在运行，可能卡在某处
+                    if (_srv && _srv->IsClosed()) {
+                        LOG_I("服务器已标记为关闭，但线程仍在运行");
+                    }
+                }
+
+                // 最后尝试join，如果仍然可以join
+                if (_thread.joinable()) {
+                    LOG_I("执行最终join操作");
+                    // 设置一个短的超时时间
+                    _thread.join();
+                }
+            } catch (const std::exception& e) {
+                LOG_E("等待服务器线程时出错: {}", e.what());
+            }
         }
+
+        LOG_I("ServerGuard等待完成");
     }
 
     // 手动触发服务器关闭

@@ -14,7 +14,7 @@ namespace zener {
 #ifdef __USE_MAPTIMER
 using TimerManagerImpl = rbtimer::TimerManager;
 #else  // !__USE_MAPTIMER
-using TimerManagerImpl = v0::HeapTimerManager;
+using TimerManagerImpl = v0::TimerManager;
 #endif // !__USE_MAPTIMER
 
 } // namespace zener
