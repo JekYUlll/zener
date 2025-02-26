@@ -66,7 +66,7 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     // TODO 修改 log 类，使其自动拼接，并且存储一个 dir。 log.name
     // 此处是手动拼接的
     // 需要配置完整的路径
-    const auto logDir = GET_CONFIG("log.dir");   // logs
+    const auto logDir = GET_CONFIG("log.dir"); // logs
     const std::string fullLogDir = _cwd + "/" + logDir;
     if (!Logger::WriteToFile(fullLogDir)) {
         LOG_E("Failed to create log file in directory: {}!", fullLogDir);
@@ -126,7 +126,7 @@ void Server::Start() {
         LOG_I("Server start at {}", _port);
         while (!_isClose) {
             if (_timeoutMS > 0) {
-                timeMS = TimerManager::GetInstance().GetNextTick();
+                timeMS = TimerManagerImpl::GetInstance().GetNextTick();
             }
             // 限制timeMS最大值，确保即使没有事件，epoll_wait也能定期返回检查_isClose标志
             if (timeMS < 0 || timeMS > 1000) {
@@ -252,7 +252,8 @@ void Server::sendError(int fd, const char* info) {
 void Server::closeConn(http::Conn* client) const {
     assert(client);
     int fd = client->GetFd();
-    LOG_I("Client [{0} - {1} {2}] quit.", fd, client->GetIP(), client->GetPort());
+    LOG_I("Client [{0} - {1} {2}] quit.", fd, client->GetIP(),
+          client->GetPort());
     // 1. 先从定时器映射中删除该fd关联的定时器
     if (_timeoutMS > 0) {
         try {
@@ -266,7 +267,8 @@ void Server::closeConn(http::Conn* client) const {
     }
     // 2. 从epoll中删除文件描述符
     if (!_epoller->DelFd(fd)) {
-        LOG_E("Failed to delete client fd [{0} - {1} {2}]!", fd, client->GetIP(), client->GetPort());
+        LOG_E("Failed to delete client fd [{0} - {1} {2}]!", fd,
+              client->GetIP(), client->GetPort());
     }
     // 3. 关闭连接
     client->Close();
@@ -278,7 +280,7 @@ void Server::addClient(int fd, const sockaddr_in& addr) const {
     assert(fd > 0);
     _users[fd].init(fd, addr);
     if (_timeoutMS > 0) {
-        TimerManager::GetInstance().ScheduleWithKey(
+        TimerManagerImpl::GetInstance().ScheduleWithKey(
             fd, _timeoutMS, 0, [this, fd]() {
                 if (_users.count(fd) > 0) {
                     closeConn(&_users[fd]);
@@ -288,15 +290,17 @@ void Server::addClient(int fd, const sockaddr_in& addr) const {
             LOG_E("Failed to add client fd {}!", fd);
         }
         setFdNonblock(fd);
-        LOG_I("Client {} in!", _users[fd].GetFd());
+        LOG_I("Client {} [{}:{}] in!", _users[fd].GetFd(), _users[fd].GetIP(),
+              _users[fd].GetPort());
     }
 }
 
 void Server::dealListen() const {
-    struct sockaddr_in addr {};
+    struct sockaddr_in addr{};
     socklen_t len = sizeof(addr);
     do {
-        const int fd = accept(_listenFd, reinterpret_cast<struct sockaddr*>(&addr), &len);
+        const int fd =
+            accept(_listenFd, reinterpret_cast<struct sockaddr*>(&addr), &len);
         if (fd <= 0) {
             return;
         }
@@ -392,7 +396,7 @@ void Server::onWrite(http::Conn* client) const {
 /* Create listenFd */
 bool Server::initSocket() {
     int ret = 0;
-    struct sockaddr_in addr {};
+    struct sockaddr_in addr{};
     if (_port > 65535 || _port < 1024) {
         LOG_E("Port: {} is invalid!", _port);
         return false;

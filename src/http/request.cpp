@@ -6,16 +6,13 @@
 #include <mysql/mysql.h>
 #include <regex>
 
-
 namespace zener::http {
 
-using namespace std;
-
-const unordered_set<string> Request::DEFAULT_HTML{
+const std::unordered_set<std::string> Request::DEFAULT_HTML{
     "/index", "/register", "/login", "/welcome", "/video", "/picture",
 };
 
-const unordered_map<string, int> Request::DEFAULT_HTML_TAG{
+const std::unordered_map<std::string, int> Request::DEFAULT_HTML_TAG{
     {"/register.html", 0},
     {"/login.html", 1},
 };
@@ -42,7 +39,7 @@ bool Request::parse(Buffer& buff) {
     }
     while (buff.ReadableBytes() && state_ != FINISH) {
         const char* lineEnd =
-            search(buff.Peek(), buff.BeginWrite(), CRLF, CRLF + 2);
+            std::search(buff.Peek(), buff.BeginWrite(), CRLF, CRLF + 2);
         // 因为const实现不同，此处进行兼容，强行调用 const 版本的 Peek()
         const char* peek = buff.Peek();
         std::string line(peek, lineEnd);
@@ -87,10 +84,10 @@ void Request::ParsePath_() {
     }
 }
 
-bool Request::ParseRequestLine_(const string& line) {
+bool Request::ParseRequestLine_(const std::string& line) {
     // 正则
-    const regex patten("^([^ ]*) ([^ ]*) HTTP/([^ ]*)$");
-    if (smatch subMatch; regex_match(line, subMatch, patten)) {
+    const std::regex patten("^([^ ]*) ([^ ]*) HTTP/([^ ]*)$");
+    if (std::smatch subMatch; regex_match(line, subMatch, patten)) {
         method_ = subMatch[1];
         path_ = subMatch[2];
         version_ = subMatch[3];
@@ -101,9 +98,9 @@ bool Request::ParseRequestLine_(const string& line) {
     return false;
 }
 
-void Request::ParseHeader_(const string& line) {
-    regex patten("^([^:]*): ?(.*)$");
-    smatch subMatch;
+void Request::ParseHeader_(const std::string& line) {
+    std::regex patten("^([^:]*): ?(.*)$");
+    std::smatch subMatch;
     if (regex_match(line, subMatch, patten)) {
         header_[subMatch[1]] = subMatch[2];
     } else {
@@ -111,7 +108,7 @@ void Request::ParseHeader_(const string& line) {
     }
 }
 
-void Request::ParseBody_(const string& line) {
+void Request::ParseBody_(const std::string& line) {
     body_ = line;
     ParsePost_();
     state_ = FINISH;
@@ -150,7 +147,7 @@ void Request::ParseFromUrlencoded_() {
         return;
     }
 
-    string key, value;
+    std::string key, value;
     int num = 0;
     int n = body_.size();
     int i = 0, j = 0;
@@ -188,8 +185,8 @@ void Request::ParseFromUrlencoded_() {
     }
 }
 
-bool Request::UserVerify(const string& name, const string& pwd,
-                             bool isLogin) {
+bool Request::UserVerify(const std::string& name, const std::string& pwd,
+                         bool isLogin) {
     if (name == "" || pwd == "") {
         return false;
     }
@@ -224,7 +221,7 @@ bool Request::UserVerify(const string& name, const string& pwd,
 
     while (MYSQL_ROW row = mysql_fetch_row(res)) {
         LOG_D("MYSQL ROW: {0} {1}", row[0], row[1]);
-        string password(row[1]);
+        std::string password(row[1]);
         /* 注册行为 且 用户名未被使用*/
         if (isLogin) {
             if (pwd == password) {
