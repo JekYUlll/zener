@@ -8,8 +8,6 @@
 #include <cassert>
 #include <condition_variable>
 #include <functional>
-// #include <chrono>
-// #include <future>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -22,7 +20,9 @@ class ThreadPool {
     explicit ThreadPool(const size_t threadCount = 6)
         : _pool(std::make_shared<Pool>()) {
         assert(threadCount > 0);
-        for (size_t i = 0; i < threadCount; i++) {
+        for (
+            size_t i = 0; i < threadCount;
+            i++) { // 此实现直接在构造的时候创建thread，没有提前存储thread的vector
             std::thread([pool = _pool] {
                 std::unique_lock<std::mutex> locker(pool->mtx);
                 while (true) {
@@ -38,7 +38,7 @@ class ThreadPool {
                     else
                         pool->cond.wait(locker);
                 }
-            }).detach();
+            }).detach(); // 直接 detach?
         }
     }
 

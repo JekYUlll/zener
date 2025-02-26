@@ -1,12 +1,26 @@
 #ifndef ZENER_THREAD_POOL_H
 #define ZENER_THREAD_POOL_H
 
-// 编译期无法直接获取 CPU 内核数，因为 CPU 内核数是与运行环境相关的信息
-
 // TODO 源文件拆分
+/*
+1. 动态线程调整
+    根据队列负载动态增减线程，避免资源浪费（如 C++17 的 std::jthread）。
 
+2. ​无锁队列或任务窃取
+    替换 std::queue 为无锁结构（如 moodycamel::ConcurrentQueue）或实现工作窃取。
+
+3. ​支持优先级任务
+    使用优先队列，按任务优先级调度。
+
+4. ​超时机制
+    允许任务设置超时时间，避免长时间阻塞。
+
+5. ​异常安全
+    捕获任务异常并传递到主线程，避免线程崩溃。
+*/
 #include "utils/safequeue.hpp"
 
+#include <cstddef>
 #include <functional>
 #include <future>
 #include <mutex>
@@ -16,7 +30,7 @@
 
 namespace zener {
 
-constexpr int THREAD_NUM = 6;
+constexpr int THREAD_NUM = 6; // 线程池并行的线程数量
 
 class ThreadPool {
   private:
@@ -75,7 +89,7 @@ class ThreadPool {
 
     // Inits thread pool
     void init() {
-        for (int i = 0; i < _threads.size(); ++i) {
+        for (size_t i = 0; i < _threads.size(); ++i) {
             _threads.at(i) = std::thread(ThreadWorker(this, i)); // 分配工作线程
         }
     }
@@ -83,36 +97,39 @@ class ThreadPool {
     // Waits until threads finish their current task and shutdowns the pool
     void shutdown() {
         _shutdown = true;
-        _con.notify_all(); // 通知，唤醒所有工作线程
-        for (auto & t : _threads) {
+        _con.notify_all(); // 唤醒所有工作线程
+        for (auto& t : _threads) {
             if (t.joinable()) { // 判断线程是否在等待
-                t.join(); // 将线程加入到等待队列
+                t.join();       // 将线程加入到等待队列
             }
         }
     }
 
+    // 把参数列表的函数 function 包装成 packaged_task, 变成智能指针，再塞进一个
+    // function，然后塞进队列
     // Submit a function to be executed asynchronously by the pool
     template <typename F, typename... Args>
     auto submit(F&& f, Args&&... args) -> std::future<decltype(f(args...))> {
         // Create a function with bounded parameter ready to execute
-        std::function<decltype(f(args...))()> func =
-            std::bind(std::forward<F>(f), std::forward<Args>(args)...);
+        std::function<decltype(f(args...))()> func = std::bind(
+            std::forward<F>(f),
+            std::forward<Args>(args)...); // 此处的万能引用似乎是无效的
         // Encapsulate it into a shared pointer in order to be able to copy
         // construct
         auto task_ptr =
-            std::make_shared<std::packaged_task<decltype(f(args...))()>>(func);
+            std::make_shared<std::packaged_task<decltype(f(args...))()>>(
+                func); // std::packaged_task ​不可复制，只能移动
 
         // Warp packaged task into void function
         std::function<void()> warpper_func = [task_ptr]() { (*task_ptr)(); };
-
         // 队列通用安全封包函数，并压入安全队列
         _queue.enqueue(warpper_func);
 
-        // 唤醒一个等待中的线程
-        _con.notify_one();
+        // _queue.enqueue([task_ptr]() { (*task_ptr)(); }); // 简化为一步
 
-        // 返回先前注册的任务指针
-        return task_ptr->get_future();
+        _con.notify_one(); // 唤醒一个等待中的线程
+
+        return task_ptr->get_future(); // 返回先前注册的任务指针
     }
 };
 

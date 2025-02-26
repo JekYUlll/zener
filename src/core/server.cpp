@@ -4,7 +4,6 @@
 #include "database/sql_connector.h"
 #include "http/conn.h"
 #include "task/threadpool_1.h"
-#include "task/timer/timer.h"
 #include "utils/log/logger.h"
 
 #include <asm-generic/socket.h>
@@ -68,7 +67,7 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     // 需要配置完整的路径
     const auto logDir = GET_CONFIG("log.dir");   // logs
     const auto logName = GET_CONFIG("log.name"); // "test.log"
-    const std::string logPath = _cwd + "/" + logDir + "/" + logName;  // 绝对路径
+    const std::string logPath = _cwd + "/" + logDir + "/" + logName; // 绝对路径
     if (mkdir((_cwd + "/" + logDir).c_str(), 0777) != 0 && errno != EEXIST) {
         LOG_E("Failed to create log directory: {}", _cwd + "/" + logDir);
         return;
@@ -145,12 +144,14 @@ void Server::Start() {
                 uint32_t events = _epoller->GetEvents(i);
                 if (fd == _listenFd) {
                     dealListen();
-                } else if (events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) { // 关闭
+                } else if (events &
+                           (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) { // 关闭
                     if (_users.count(fd) > 0) {
                         closeConn(&_users[fd]);
                     } else {
-                        LOG_W("Fd {} is not in _users but get a CLOSE event!", fd);
-                        if(!_epoller->DelFd(fd)) {
+                        LOG_W("Fd {} is not in _users but get a CLOSE event!",
+                              fd);
+                        if (!_epoller->DelFd(fd)) {
                             LOG_E("Failed to del fd {}!", fd);
                         }
                     }
@@ -158,8 +159,9 @@ void Server::Start() {
                     if (_users.count(fd) > 0) {
                         dealRead(&_users[fd]);
                     } else {
-                        LOG_W("Fd {} is not in _users but get a READ event!", fd);
-                        if(!_epoller->DelFd(fd)) {
+                        LOG_W("Fd {} is not in _users but get a READ event!",
+                              fd);
+                        if (!_epoller->DelFd(fd)) {
                             LOG_E("Failed to del fd {}!", fd);
                         }
                     }
@@ -167,8 +169,9 @@ void Server::Start() {
                     if (_users.count(fd) > 0) {
                         dealWrite(&_users[fd]);
                     } else {
-                        LOG_W("Fd {} is not in _users but get a WRITE event!", fd);
-                        if(!_epoller->DelFd(fd)) {
+                        LOG_W("Fd {} is not in _users but get a WRITE event!",
+                              fd);
+                        if (!_epoller->DelFd(fd)) {
                             LOG_E("Failed to del fd {}!", fd);
                         }
                     }
@@ -185,7 +188,8 @@ void Server::Start() {
 
 void Server::Stop() {
     if (close(_listenFd) != 0) { // 可能多余
-        LOG_E("Failed to close listen fd {0} : {1}", _listenFd, strerror(errno));
+        LOG_E("Failed to close listen fd {0} : {1}", _listenFd,
+              strerror(errno));
     }
     db::SqlConnector::GetInstance().Close();
     _isClose = true;
@@ -204,7 +208,8 @@ void Server::Shutdown(const int timeoutMS) {
         LOG_I("Waiting for {} active connections to close", initialConnCount);
         while (!_users.empty() && waitTime < timeoutMS) {
             constexpr int checkInterval = 100;
-            std::this_thread::sleep_for(std::chrono::milliseconds(checkInterval));
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(checkInterval));
             waitTime += checkInterval;
             if (waitTime % 1000 == 0) { // 每秒打印一次剩余连接数
                 LOG_I("Still waiting: {} connections remaining, elapsed: {}ms",
@@ -333,11 +338,11 @@ void Server::extentTime(const http::Conn* client) const {
         // 使用ScheduleWithKey，确保每个文件描述符只有一个定时器
         HeapTimerManager::GetInstance().ScheduleWithKey(
             client->GetFd(), _timeoutMS, 0, [this, fd = client->GetFd()]() {
-            // 由于lambda可能在Server对象销毁后执行，需要安全处理
-            if (!_isClose && _users.count(fd) > 0) {
-                this->closeConn(&this->_users[fd]);
-            }
-        });
+                // 由于lambda可能在Server对象销毁后执行，需要安全处理
+                if (!_isClose && _users.count(fd) > 0) {
+                    this->closeConn(&this->_users[fd]);
+                }
+            });
     }
 }
 

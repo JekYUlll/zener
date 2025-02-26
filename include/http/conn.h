@@ -4,16 +4,18 @@
 // 工作线程预先调用Read()从socket缓冲区读入报文进读缓冲，接着调用Parse()先解析读缓冲的请求报文，然后根据其内容制作应答报文并写入写缓冲，
 // 最后将分散写指针设置在写缓冲的相应位置，方便工作线程调用Write()写出至socket缓冲区。
 
+// 工作线程的 task
+// 一个工作线程负责调用一个 connector 来处理一条连接
+
 #include "buffer/buffer.h"
 #include "common.h"
 #include "http/request.h"
 #include "http/response.h"
 
 #include <arpa/inet.h> // sockaddr_in
-#include <cstdlib>    // atoi()
+#include <cstdlib>     // atoi()
 #include <sys/types.h>
 #include <sys/uio.h> // readv/writev
-
 
 namespace zener::http {
 
@@ -55,7 +57,7 @@ class Conn {
         return _request.IsKeepAlive();
     }
 
-    static bool isET;          // 是否为边缘触发
+    static bool isET;             // 是否为边缘触发
     static const char* staticDir; // 请求文件对应的根目录
     static std::atomic<int> userCount;
 
@@ -76,6 +78,5 @@ class Conn {
 };
 
 } // namespace zener::http
-
 
 #endif // !ZENER_HTTP_CONN_H
