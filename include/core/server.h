@@ -126,25 +126,12 @@ class ServerGuard {
     // 等待服务器线程结束，允许超时和中断
     void Wait() {
         const int CHECK_INTERVAL_MS = 100; // 检查服务器状态的间隔
-        const int MAX_WAIT_SECONDS = 5;    // 最大等待时间
 
         // 等待信号或其他退出条件
-        auto start = std::chrono::high_resolution_clock::now();
         while (!_shouldExit) {
             // 检查服务器线程是否已经结束
             if (!_thread.joinable() || (_srv && _srv->IsClosed())) {
-                LOG_I("服务器线程已退出或服务器已关闭");
-                break;
-            }
-
-            // 检查是否已经等待太长时间
-            auto now = std::chrono::high_resolution_clock::now();
-            auto elapsed =
-                std::chrono::duration_cast<std::chrono::seconds>(now - start)
-                    .count();
-            if (elapsed > MAX_WAIT_SECONDS) {
-                LOG_W("等待服务器超时，将强制关闭");
-                _shouldExit = true;
+                LOG_I("Server thread has exited or server is closed");
                 break;
             }
 
@@ -155,7 +142,7 @@ class ServerGuard {
 
         // 如果收到退出信号，确保关闭服务器
         if (_shouldExit && _srv && !_srv->IsClosed()) {
-            LOG_I("收到退出信号，正在关闭服务器...");
+            LOG_I("Exit signal received, shutting down server...");
             _srv->Shutdown();
         }
 
@@ -165,8 +152,8 @@ class ServerGuard {
 
             // 尝试在有限时间内等待线程结束
             try {
-                // 最多等待2秒
-                auto joinTimeout = std::chrono::seconds(2);
+                // 最多等待3秒
+                auto joinTimeout = std::chrono::seconds(3);
                 auto joinStart = std::chrono::high_resolution_clock::now();
 
                 while (_thread.joinable()) {
@@ -177,28 +164,28 @@ class ServerGuard {
                     auto joinNow = std::chrono::high_resolution_clock::now();
                     if (std::chrono::duration_cast<std::chrono::seconds>(
                             joinNow - joinStart) > joinTimeout) {
-                        LOG_W("线程未能在时间限制内结束，放弃等待");
+                        LOG_W("Thread did not finish within time limit, giving "
+                              "up");
                         break;
                     }
 
                     // 如果服务器已关闭但线程仍在运行，可能卡在某处
                     if (_srv && _srv->IsClosed()) {
-                        LOG_I("服务器已标记为关闭，但线程仍在运行");
+                        LOG_I("Server marked as closed, but thread still "
+                              "running");
                     }
                 }
 
                 // 最后尝试join，如果仍然可以join
                 if (_thread.joinable()) {
-                    LOG_I("执行最终join操作");
+                    LOG_I("Executing final join operation");
                     // 设置一个短的超时时间
                     _thread.join();
                 }
             } catch (const std::exception& e) {
-                LOG_E("等待服务器线程时出错: {}", e.what());
+                LOG_E("Error waiting for server thread: {}", e.what());
             }
         }
-
-        LOG_I("ServerGuard等待完成");
     }
 
     // 手动触发服务器关闭

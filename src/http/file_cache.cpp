@@ -33,11 +33,11 @@ CachedFile* FileCache::GetFileMapping(const std::string& filePath,
                 cache->lastAccess = std::chrono::steady_clock::now();
                 cache->refCount++;
 
-                LOG_D("文件缓存命中: {}, 当前引用计数: {}", filePath,
-                      cache->refCount.load());
+                LOG_D("File cache hit: {}, current reference count: {}",
+                      filePath, cache->refCount.load());
                 return cache;
             } else {
-                LOG_D("文件已被修改，重新加载: {}", filePath);
+                LOG_D("File has been modified, reloading: {}", filePath);
                 // 文件已被修改，需要重新加载，但需要升级锁
             }
         }
@@ -57,12 +57,13 @@ CachedFile* FileCache::GetFileMapping(const std::string& filePath,
             cache->lastAccess = std::chrono::steady_clock::now();
             cache->refCount++;
 
-            LOG_D("文件缓存命中(二次检查): {}, 当前引用计数: {}", filePath,
-                  cache->refCount.load());
+            LOG_D("File cache hit (second check): {}, current reference count: "
+                  "{}",
+                  filePath, cache->refCount.load());
             return cache;
         } else {
             // 删除旧缓存
-            LOG_D("移除过期文件缓存: {}", filePath);
+            LOG_D("Removing expired file cache: {}", filePath);
             UnloadFile(cache);
             _fileCache.erase(it);
         }
@@ -73,8 +74,8 @@ CachedFile* FileCache::GetFileMapping(const std::string& filePath,
     if (newCache) {
         _fileCache[filePath] = newCache;
         _totalMappedFiles++;
-        LOG_D("新增文件缓存: {}, 当前总映射文件数: {}", filePath,
-              _totalMappedFiles.load());
+        LOG_D("New file cache added: {}, current total mapped files: {}",
+              filePath, _totalMappedFiles.load());
     }
 
     return newCache;
@@ -92,8 +93,9 @@ void FileCache::ReleaseFileMapping(const std::string& filePath) {
             if (cache->refCount.compare_exchange_weak(
                     currentCount, currentCount - 1, std::memory_order_release,
                     std::memory_order_relaxed)) {
-                LOG_D("释放文件映射引用: {}, 当前引用计数: {}", filePath,
-                      currentCount - 1);
+                LOG_D("Releasing file mapping reference: {}, current reference "
+                      "count: {}",
+                      filePath, currentCount - 1);
                 break;
             }
         }
@@ -105,7 +107,8 @@ void FileCache::CleanupCache(int maxIdleTime) {
     auto now = std::chrono::steady_clock::now();
     int removedCount = 0;
 
-    LOG_D("开始清理文件缓存，当前缓存数量: {}", _fileCache.size());
+    LOG_D("Starting to clean file cache, current cache size: {}",
+          _fileCache.size());
 
     for (auto it = _fileCache.begin(); it != _fileCache.end();) {
         CachedFile* cache = it->second;
@@ -117,7 +120,8 @@ void FileCache::CleanupCache(int maxIdleTime) {
                                 .count();
 
             if (idleTime > maxIdleTime) {
-                LOG_D("清理空闲文件缓存: {}, 空闲时间: {}秒, 引用计数: {}",
+                LOG_D("Cleaning idle file cache: {}, idle time: {} seconds, "
+                      "reference count: {}",
                       it->first, idleTime, cache->refCount.load());
                 UnloadFile(cache);
                 it = _fileCache.erase(it);
@@ -126,21 +130,22 @@ void FileCache::CleanupCache(int maxIdleTime) {
                 continue;
             }
         } else {
-            LOG_D("跳过仍在使用的文件: {}, 引用计数: {}", it->first,
-                  cache->refCount.load());
+            LOG_D("Skipping file still in use: {}, reference count: {}",
+                  it->first, cache->refCount.load());
         }
         ++it;
     }
 
-    LOG_D("文件缓存清理完成, 清理数量: {}, 当前缓存文件数: {}", removedCount,
-          _fileCache.size());
+    LOG_D("File cache cleaning completed, cleaned count: {}, current cache "
+          "file count: {}",
+          removedCount, _fileCache.size());
 }
 
 CachedFile* FileCache::LoadFile(const std::string& filePath,
                                 const struct stat& fileStat) {
     int fd = open(filePath.c_str(), O_RDONLY);
     if (fd < 0) {
-        LOG_E("打开文件失败: {}, 错误: {}", filePath, strerror(errno));
+        LOG_E("Failed to open file: {}, error: {}", filePath, strerror(errno));
         return nullptr;
     }
 
@@ -149,7 +154,7 @@ CachedFile* FileCache::LoadFile(const std::string& filePath,
     close(fd); // 映射后可以关闭文件描述符
 
     if (mmapPtr == MAP_FAILED) {
-        LOG_E("mmap文件失败: {}, 错误: {}", filePath, strerror(errno));
+        LOG_E("mmap file failed: {}, error: {}", filePath, strerror(errno));
         return nullptr;
     }
 
@@ -160,16 +165,16 @@ CachedFile* FileCache::LoadFile(const std::string& filePath,
     cache->lastModTime = fileStat.st_mtime;
     cache->lastAccess = std::chrono::steady_clock::now();
 
-    LOG_D("文件成功映射到缓存: {}, 大小: {}, 地址: {:p}", filePath, fileSize,
-          (void*)cache->data);
+    LOG_D("File successfully mapped to cache: {}, size: {}, address: {:p}",
+          filePath, fileSize, (void*)cache->data);
 
     return cache;
 }
 
 void FileCache::UnloadFile(CachedFile* file) {
     if (file && file->data) {
-        LOG_D("卸载文件映射: 地址={:p}, 大小={}", (void*)file->data,
-              file->size);
+        LOG_D("Unloading file mapping: address={:p}, size={}",
+              (void*)file->data, file->size);
         munmap(file->data, file->size);
         delete file;
     }

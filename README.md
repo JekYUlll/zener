@@ -43,6 +43,7 @@ zener::Logger::WriteToFileWithRotation("logs", "server", 100*1024*1024, 5);
 - `scripts/benchmark.sh` - 对服务器进行性能测试
 - `scripts/kill.sh` - 停止正在运行的服务器
 - `scripts/test_log_rotation.sh` - 测试日志轮转功能
+- `scripts/create_symlinks.sh` - 创建可执行文件符号链接
 
 ### 构建所有版本
 
@@ -52,8 +53,18 @@ zener::Logger::WriteToFileWithRotation("logs", "server", 100*1024*1024, 5);
 
 此脚本会同时构建MAP和HEAP两个版本的服务器，输出文件分别为：
 
-- `bin/Zener_map` - MAP定时器版本
-- `bin/Zener_heap` - HEAP定时器版本
+- `bin/Zener-map` - MAP定时器版本 (同时创建 `bin/Zener_map` 符号链接)
+- `bin/Zener-heap` - HEAP定时器版本 (同时创建 `bin/Zener_heap` 符号链接)
+- `bin/Zener` - 默认版本 (如果已配置)
+
+### 文件命名约定
+
+Zener项目使用连字符(-)作为可执行文件的命名标准，同时通过符号链接支持之前的下划线(_)命名风格：
+
+- `bin/Zener-map` 是标准命名，`bin/Zener_map` 是向后兼容的符号链接
+- `bin/Zener-heap` 是标准命名，`bin/Zener_heap` 是向后兼容的符号链接
+
+详细信息请参考[命名约定文档](docs/naming_convention.md)。
 
 ### 运行服务器
 

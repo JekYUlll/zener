@@ -22,19 +22,27 @@ class GLogger {
 };
 
 #define LOG_T(...)                                                             \
-    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                    \
+    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                  \
                           spdlog::level::trace, __VA_ARGS__)
+
+#ifdef DEBUG
 #define LOG_D(...)                                                             \
-    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                    \
+    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                  \
                           spdlog::level::debug, __VA_ARGS__)
+#else
+#define LOG_D(...)                                                             \
+    do {                                                                       \
+    } while (0) // 在非DEBUG模式下不执行任何操作
+#endif
+
 #define LOG_I(...)                                                             \
-    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                    \
+    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                  \
                           spdlog::level::info, __VA_ARGS__)
 #define LOG_W(...)                                                             \
-    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                    \
+    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                  \
                           spdlog::level::warn, __VA_ARGS__)
 #define LOG_E(...)                                                             \
-    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                    \
+    ZENER_LOG_LOGGER_CALL(zener::Logger::GetLoggerInstance(),                  \
                           spdlog::level::err, __VA_ARGS__)
 } // namespace zener
 #else

@@ -126,10 +126,10 @@ void Response::addContent(Buffer& buff) {
     // 打开文件前先记录当前路径，以便后续释放
     _cachedFilePath = fullPath;
 
-    LOG_D("文件路径: {}, 大小: {}", fullPath.c_str(), _fileStat.st_size);
+    LOG_D("File path: {}, size: {}", fullPath.c_str(), _fileStat.st_size);
 
     if (_fileStat.st_size <= 0) {
-        LOG_W("文件大小为0或负数: {}", fullPath.c_str());
+        LOG_W("File size is zero or negative: {}", fullPath.c_str());
         buff.Append("Content-length: 0\r\n\r\n");
         return;
     }
@@ -138,7 +138,7 @@ void Response::addContent(Buffer& buff) {
     auto cachedFile =
         FileCache::GetInstance().GetFileMapping(fullPath, _fileStat);
     if (!cachedFile) {
-        LOG_E("获取文件映射失败: {}", fullPath.c_str());
+        LOG_E("Failed to get file mapping: {}", fullPath.c_str());
         ErrorContent(buff, "File NotFound!");
         return;
     }
@@ -148,8 +148,9 @@ void Response::addContent(Buffer& buff) {
 
     buff.Append("Content-length: " + to_string(_fileStat.st_size) + "\r\n\r\n");
 
-    LOG_D("文件成功映射到内存: 地址={:p}, 大小={}, 使用缓存: {}", (void*)_file,
-          _fileStat.st_size, !_cachedFilePath.empty());
+    LOG_D("File successfully mapped to memory: address={:p}, size={}, using "
+          "cache: {}",
+          (void*)_file, _fileStat.st_size, !_cachedFilePath.empty());
 }
 
 void Response::UnmapFile() {
@@ -161,15 +162,16 @@ void Response::UnmapFile() {
         if (!_cachedFilePath.empty()) {
             // 不直接调用munmap，而是通过缓存系统释放引用
             try {
-                LOG_D("释放文件映射: 文件={}, 地址={:p}", _cachedFilePath,
-                      (void*)_file);
+                LOG_D("Releasing file mapping: file={}, address={:p}",
+                      _cachedFilePath, (void*)_file);
                 FileCache::GetInstance().ReleaseFileMapping(_cachedFilePath);
             } catch (const std::exception& e) {
-                LOG_E("释放文件映射时发生异常: {}, 文件={}", e.what(),
-                      _cachedFilePath);
+                LOG_E("Exception when releasing file mapping: {}, file={}",
+                      e.what(), _cachedFilePath);
             }
         } else {
-            LOG_W("尝试释放无效的文件映射，地址={:p}", (void*)_file);
+            LOG_W("Trying to release invalid file mapping, address={:p}",
+                  (void*)_file);
         }
 
         // 重置状态

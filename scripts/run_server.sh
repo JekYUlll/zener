@@ -73,25 +73,12 @@ fi
 mkdir -p bin
 
 # 检查可执行文件是否存在
-EXECUTABLE="bin/Zener_${TIMER_TYPE}"
+EXECUTABLE="bin/Zener-${TIMER_TYPE}"
 if [ ! -f "$EXECUTABLE" ]; then
     echo -e "${YELLOW}警告: ${EXECUTABLE} 不存在, 尝试构建...${NC}"
     
-    if [ "$TIMER_TYPE" == "map" ]; then
-        mkdir -p build_map
-        cd build_map || exit 1
-        cmake .. -DTIMER_IMPLEMENTATION=MAP
-        make -j $(nproc)
-        cp Zener "../bin/Zener_map" 2>/dev/null
-    else
-        mkdir -p build_heap
-        cd build_heap || exit 1
-        cmake .. -DTIMER_IMPLEMENTATION=HEAP
-        make -j $(nproc)
-        cp Zener "../bin/Zener_heap" 2>/dev/null
-    fi
-    
-    cd "$PROJECT_ROOT" || exit 1
+    # 使用build_all.sh脚本构建
+    ./scripts/build_all.sh
     
     if [ ! -f "$EXECUTABLE" ]; then
         echo -e "${RED}错误: 无法构建或找到 $EXECUTABLE${NC}"

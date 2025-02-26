@@ -34,7 +34,7 @@ void Conn::init(int fd, const sockaddr_in& addr) {
     _readBuff.RetrieveAll();
     _isClose = false;
     LOG_I("Client {0} [{1}:{2}] in, userCount: {3}", _fd, GetIP(), GetPort(),
-          userCount.load());
+          (int)userCount);
 }
 
 void Conn::Close() {
@@ -42,9 +42,17 @@ void Conn::Close() {
     if (!_isClose) {
         _isClose = true;
         --userCount;
-        close(_fd);
-        LOG_I("Client {0} [{1}:{2}] (connId={3}) quit, userCount: {4}", _fd,
-              GetIP(), GetPort(), _connId, userCount.load());
+        // 确保只关闭有效的文件描述符
+        if (_fd > 0) {
+            close(_fd);
+            LOG_I("Client {0} [{1}:{2}] (connId={3}) quit, userCount: {4}", _fd,
+                  GetIP(), GetPort(), _connId, (int)userCount);
+        } else {
+            LOG_W("Client with invalid fd={} (connId={}) quit, userCount: {}",
+                  _fd, _connId, (int)userCount);
+        }
+        // 关闭后将fd设为-1，防止重复关闭
+        _fd = -1;
     }
 }
 
@@ -60,8 +68,9 @@ ssize_t Conn::read(int* saveErrno) {
 }
 
 ssize_t Conn::write(int* saveErrno) {
-    LOG_D("写入连接 fd={}, connId={}: 开始发送数据, 剩余待写字节={}", _fd,
-          _connId, ToWriteBytes());
+    LOG_D("Writing connection fd={}, connId={}: starting to send data, "
+          "remaining bytes to write={}",
+          _fd, _connId, _iov[0].iov_len + _iov[1].iov_len);
     ssize_t ret = 0;
     ssize_t totalWritten = 0;
 
@@ -69,46 +78,52 @@ ssize_t Conn::write(int* saveErrno) {
         return totalWritten;
     }
 
-    LOG_D("写入连接 fd={}, connId={}: 开始发送, iovCnt={}", _fd, _connId,
-          _iovCnt);
+    LOG_D("Writing connection fd={}, connId={}: starting to send, iovCnt={}",
+          _fd, _connId, _iovCnt);
 
-    // 打印iov情况
+    // 调试输出，查看iov结构
     for (int i = 0; i < _iovCnt; ++i) {
-        LOG_D("写入连接 fd={}, connId={}: iov[{}] - 基址={:p}, 长度={}", _fd,
-              _connId, i, _iov[i].iov_base, _iov[i].iov_len);
+        LOG_D("Writing connection fd={}, connId={}: iov[{}] - base={:p}, "
+              "length={}",
+              _fd, _connId, i, _iov[i].iov_base, _iov[i].iov_len);
     }
 
-    do {
+    // 最多循环写两次
+    constexpr int MAX_ATTEMPTS = 2;
+    for (int attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
         ret = writev(_fd, _iov, _iovCnt);
 
         if (ret < 0) {
             // 如果是EAGAIN，在ET模式下应继续尝试
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 *saveErrno = errno;
-                LOG_D("写入连接 fd={}, connId={}: 暂时无法写入 (EAGAIN), "
-                      "已写入 {} 字节",
+                LOG_D("Writing connection fd={}, connId={}: temporarily unable "
+                      "to write (EAGAIN), "
+                      "already written {} bytes",
                       _fd, _connId, totalWritten);
                 return totalWritten;
             }
 
             // 其他错误则直接返回
             *saveErrno = errno;
-            LOG_E("写入连接 fd={}, connId={}: 写入错误, errno={}, 错误信息={}",
+            LOG_E("Writing connection fd={}, connId={}: write error, errno={}, "
+                  "error message={}",
                   _fd, _connId, errno, strerror(errno));
             return -1;
         }
 
         // 累计已写入的数据量
         totalWritten += ret;
-        LOG_D("写入连接 fd={}, connId={}: 单次发送 {} 字节, 累计已发送 {} 字节",
+        LOG_D("Writing connection fd={}, connId={}: sent {} bytes in one go, "
+              "total sent {} bytes",
               _fd, _connId, ret, totalWritten);
 
         // 更新iov结构以反映已写入的数据
         if (static_cast<size_t>(ret) > _iov[0].iov_len) {
             // 头部数据全部发送完毕，开始发送文件数据
-            LOG_D(
-                "写入连接 fd={}, connId={}: 头部数据发送完毕，开始处理文件数据",
-                _fd, _connId);
+            LOG_D("Writing connection fd={}, connId={}: header data sent, "
+                  "starting to process file data",
+                  _fd, _connId);
 
             // 更新文件数据指针和长度
             size_t fileWritten = ret - _iov[0].iov_len;
@@ -122,8 +137,9 @@ ssize_t Conn::write(int* saveErrno) {
             _iov[0].iov_len = 0;
         } else {
             // 头部数据未发送完毕
-            LOG_D("写入连接 fd={}, connId={}: 头部数据未发送完毕", _fd,
-                  _connId);
+            LOG_D("Writing connection fd={}, connId={}: header data not fully "
+                  "sent",
+                  _fd, _connId);
 
             // 更新头部数据指针和长度
             _iov[0].iov_base = static_cast<char*>(_iov[0].iov_base) + ret;
@@ -132,7 +148,7 @@ ssize_t Conn::write(int* saveErrno) {
         }
 
         // 如果没有数据需要发送了，退出循环
-        if (ToWriteBytes() == 0) {
+        if (_iov[0].iov_len + _iov[1].iov_len == 0) {
             break;
         }
 
@@ -140,51 +156,60 @@ ssize_t Conn::write(int* saveErrno) {
         // 这样可以防止长时间占用CPU
         constexpr size_t MAX_WRITE_PER_CALL = 4 * 1024 * 1024; // 4MB
         if (!isET || totalWritten > MAX_WRITE_PER_CALL) {
-            LOG_D("写入连接 fd={}, connId={}: "
-                  "单次发送达到上限或非ET模式，等待下次写入事件",
+            LOG_D("Writing connection fd={}, connId={}: "
+                  "one go write reached limit or non-ET mode, waiting for next "
+                  "write event",
                   _fd, _connId);
             break;
         }
-    } while (true);
+    }
 
-    LOG_D("写入连接 fd={}, connId={}: 发送后剩余待写字节={}", _fd, _connId,
-          ToWriteBytes());
+    LOG_D("Writing connection fd={}, connId={}: remaining bytes to write after "
+          "sending={}",
+          _fd, _connId, _iov[0].iov_len + _iov[1].iov_len);
     return totalWritten;
 }
 
 bool Conn::process() {
     _request.Init();
-    LOG_D("处理连接 fd={}, connId={}: 初始化请求", _fd, _connId);
+    LOG_D("Processing connection fd={}, connId={}: initializing request", _fd,
+          _connId);
 
     if (_readBuff.ReadableBytes() <= 0) {
-        LOG_W("处理连接 fd={}, connId={}: 读缓冲区为空", _fd, _connId);
+        LOG_W("Processing connection fd={}, connId={}: read buffer is empty",
+              _fd, _connId);
         return false;
     } else if (_request.parse(_readBuff)) {
         LOG_D("{}", _request.path().c_str());
-        LOG_D("处理连接 fd={}, connId={}: 解析成功，请求路径={}", _fd, _connId,
-              _request.path().c_str());
+        LOG_D("Processing connection fd={}, connId={}: parsing successful, "
+              "request path={}",
+              _fd, _connId, _request.path());
 
         // 在处理响应前确保清除之前可能存在的文件映射
         _response.UnmapFile();
         _response.Init(staticDir, _request.path(), _request.IsKeepAlive(), 200);
     } else {
-        LOG_W("处理连接 fd={}, connId={}: 解析失败，请求路径={}", _fd, _connId,
-              _request.path().c_str());
+        LOG_W("Processing connection fd={}, connId={}: parsing failed, request "
+              "path={}",
+              _fd, _connId, _request.path().c_str());
         _response.Init(staticDir, _request.path(), false, 400);
     }
 
-    LOG_D("处理连接 fd={}, connId={}: 准备生成响应", _fd, _connId);
+    LOG_D("Processing connection fd={}, connId={}: preparing to generate "
+          "response",
+          _fd, _connId);
 
     try {
         _response.MakeResponse(_writeBuff);
     } catch (const std::exception& e) {
-        LOG_E("生成响应时发生异常: {}, fd={}, connId={}", e.what(), _fd,
-              _connId);
+        LOG_E("Exception while generating response: {}, fd={}, connId={}",
+              e.what(), _fd, _connId);
         return false;
     }
 
     // 响应头
-    LOG_D("处理连接 fd={}, connId={}: 设置响应头缓冲区，写缓冲区可读字节数={}",
+    LOG_D("Processing connection fd={}, connId={}: setting response header "
+          "buffer, read bytes in write buffer={}",
           _fd, _connId, _writeBuff.ReadableBytes());
 
     // 确保iov设置正确
@@ -194,30 +219,26 @@ bool Conn::process() {
         _iov[0].iov_len = _writeBuff.ReadableBytes();
         _iovCnt = 1;
 
-        LOG_D("处理连接 fd={}, connId={}: iov[0]设置 - 基址={:p}, 长度={}", _fd,
-              _connId, _iov[0].iov_base, _iov[0].iov_len);
+        LOG_D("Processing connection fd={}, connId={}: iov[0] setup - "
+              "base={:p}, length={}",
+              _fd, _connId, _iov[0].iov_base, _iov[0].iov_len);
     }
 
     // 文件
     if (_response.File() && _response.FileLen() > 0) {
-        LOG_D(
-            "处理连接 fd={}, connId={}: 设置文件缓冲区，文件指针={:p}, 长度={}",
-            _fd, _connId, (void*)_response.File(), _response.FileLen());
-
-        _iov[1].iov_base = _response.File();
-        _iov[1].iov_len = _response.FileLen();
+        LOG_D("Processing connection fd={}, connId={}: adding file to iov - "
+              "base={:p}, length={}",
+              _fd, _connId, _iov[1].iov_base, _iov[1].iov_len);
         _iovCnt = 2;
     } else {
-        LOG_D("处理连接 fd={}, connId={}: 无文件或文件长度为0，File指针={:p}, "
-              "长度={}",
+        LOG_D("Processing connection fd={}, connId={}: no file or file length "
+              "is 0, File pointer={:p}, "
+              "file length={}",
               _fd, _connId, (void*)_response.File(), _response.FileLen());
-
-        // 确保设置为空，防止使用未初始化的内存
-        _iov[1].iov_base = nullptr;
-        _iov[1].iov_len = 0;
     }
 
-    LOG_D("处理连接 fd={}, connId={}: 文件大小={}, iov计数={}, 总写入字节={}",
+    LOG_D("Processing connection fd={}, connId={}: file size={}, iov count={}, "
+          "total bytes to write={}",
           _fd, _connId, _response.FileLen(), _iovCnt, ToWriteBytes());
     return true;
 }

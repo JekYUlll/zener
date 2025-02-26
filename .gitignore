@@ -9,6 +9,7 @@ cmake-build*/
 ._origin/
 .vscode/
 sql/data/
+results/
 
 # Prerequisites
 *.d

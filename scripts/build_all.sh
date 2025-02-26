@@ -31,8 +31,6 @@ make -j $(nproc)
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}MAP版本构建成功!${NC}"
-    # 复制可执行文件 - 更正命名
-    cp Zener-map "../bin/Zener_map" 2>/dev/null || echo -e "${RED}无法复制MAP版本可执行文件${NC}"
 else
     echo -e "${RED}MAP版本构建失败!${NC}"
 fi
@@ -49,8 +47,6 @@ make -j $(nproc)
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}HEAP版本构建成功!${NC}"
-    # 复制可执行文件 - 更正命名
-    cp Zener-heap "../bin/Zener_heap" 2>/dev/null || echo -e "${RED}无法复制HEAP版本可执行文件${NC}"
 else
     echo -e "${RED}HEAP版本构建失败!${NC}"
 fi
@@ -58,24 +54,34 @@ fi
 # 返回项目根目录
 cd "$PROJECT_ROOT" || exit 1
 
+# 创建符号链接以确保向后兼容性
+echo -e "${YELLOW}创建符号链接以确保向后兼容性...${NC}"
+bash ./scripts/create_symlinks.sh
+
 # 总结
 echo ""
 echo -e "${CYAN}构建摘要:${NC}"
-if [ -f "bin/Zener_map" ]; then
-    echo -e "${GREEN}✓ MAP版本可执行文件: bin/Zener_map${NC}"
+if [ -f "bin/Zener-map" ]; then
+    echo -e "${GREEN}✓ MAP版本可执行文件: bin/Zener-map${NC}"
+    if [ -L "bin/Zener_map" ]; then
+        echo -e "${GREEN}✓ MAP版本符号链接: bin/Zener_map${NC}"
+    fi
 else
     echo -e "${RED}✗ MAP版本构建不完整${NC}"
 fi
 
-if [ -f "bin/Zener_heap" ]; then
-    echo -e "${GREEN}✓ HEAP版本可执行文件: bin/Zener_heap${NC}"
+if [ -f "bin/Zener-heap" ]; then
+    echo -e "${GREEN}✓ HEAP版本可执行文件: bin/Zener-heap${NC}"
+    if [ -L "bin/Zener_heap" ]; then
+        echo -e "${GREEN}✓ HEAP版本符号链接: bin/Zener_heap${NC}"
+    fi
 else
     echo -e "${RED}✗ HEAP版本构建不完整${NC}"
 fi
 
 echo ""
 echo -e "${PURPLE}使用以下命令运行服务器:${NC}"
-echo -e "${GREEN}./bin/Zener_map${NC} - 运行MAP定时器版本"
-echo -e "${GREEN}./bin/Zener_heap${NC} - 运行HEAP定时器版本"
+echo -e "${GREEN}./bin/Zener-map${NC} 或 ${GREEN}./bin/Zener_map${NC} - 运行MAP定时器版本"
+echo -e "${GREEN}./bin/Zener-heap${NC} 或 ${GREEN}./bin/Zener_heap${NC} - 运行HEAP定时器版本"
 echo -e "${BLUE}或使用 ./scripts/run_server.sh 脚本选择版本运行${NC}"
 echo "" 
