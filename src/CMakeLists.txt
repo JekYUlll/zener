@@ -3,7 +3,6 @@ set(CORE_SOURCES
     buffer/buffer.cpp
     config/config.cpp
     core/epoller.cpp
-    core/init.cpp
     core/server.cpp
     database/sql_connector.cpp
     file/file.cpp

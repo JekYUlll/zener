@@ -156,7 +156,7 @@ void Server::Start() {
 
             // 检查文件描述符的有效性
             if (fd <= 0) {
-                LOG_W("从epoll收到无效的文件描述符 {}", fd);
+                LOG_D("从epoll收到无效的文件描述符 {}", fd);
                 continue;
             }
 
@@ -478,13 +478,13 @@ void Server::dealRead(http::Conn* client) const {
 
     // 检查文件描述符的有效性
     if (fd <= 0) {
-        LOG_W("dealRead called with invalid fd {}", fd);
+        LOG_D("dealRead called with invalid fd {}", fd);
         return;
     }
 
     // 检查连接是否在_users映射中
     if (_users.count(fd) == 0) {
-        LOG_W("dealRead called for fd {} but not found in _users", fd);
+        LOG_D("dealRead called for fd {} but not found in _users", fd);
         return;
     }
 
@@ -494,35 +494,48 @@ void Server::dealRead(http::Conn* client) const {
     uint64_t connId = client->GetConnId();
 
 #ifdef __V0
+    // 进一步验证文件描述符并检查是否已关闭
+    if (_isClose) {
+        LOG_D("Server is closing, skip adding read task for fd {}", fd);
+        return;
+    }
+
     // 直接使用fd和connId标识连接，不再尝试复制Conn对象
     _threadpool->AddTask([this, fd, connId] {
-        // 检查服务器是否已关闭
-        if (_isClose) {
-            LOG_W("Thread pool task aborted: server is closing");
-            return;
-        }
+        // 捕获任务执行时的潜在异常，防止线程崩溃
+        try {
+            // 检查服务器是否已关闭
+            if (_isClose) {
+                LOG_D("Thread pool task aborted: server is closing");
+                return;
+            }
 
-        // 检查连接是否仍然存在且ID匹配
-        if (_users.count(fd) == 0) {
-            LOG_W("Thread pool task aborted: fd {} no longer in _users map",
-                  fd);
-            return;
-        }
+            // 检查连接是否仍然存在且ID匹配
+            if (_users.count(fd) == 0) {
+                LOG_D("Thread pool task aborted: fd {} no longer in _users map",
+                      fd);
+                return;
+            }
 
-        if (_users[fd].connId != connId) {
-            LOG_W("Thread pool task aborted: connId mismatch for fd {} "
-                  "(expected {}, found {})",
-                  fd, connId, _users[fd].connId);
-            return;
-        }
+            if (_users[fd].connId != connId) {
+                LOG_D("Thread pool task aborted: connId mismatch for fd {} "
+                      "(expected {}, found {})",
+                      fd, connId, _users[fd].connId);
+                return;
+            }
 
-        // 确保文件描述符仍然有效
-        if (_users[fd].conn.GetFd() > 0) {
-            onRead(&_users[fd].conn);
-        } else {
-            LOG_W("Thread pool task found invalid fd in conn object for fd "
-                  "{}, connId {}",
-                  fd, connId);
+            // 确保文件描述符仍然有效
+            if (_users[fd].conn.GetFd() > 0) {
+                onRead(&_users[fd].conn);
+            } else {
+                LOG_D("Thread pool task found invalid fd in conn object for fd "
+                      "{}, connId {}",
+                      fd, connId);
+            }
+        } catch (const std::exception& e) {
+            LOG_E("Exception in dealRead thread pool task: {}", e.what());
+        } catch (...) {
+            LOG_E("Unknown exception in dealRead thread pool task");
         }
     });
 #elif
@@ -536,13 +549,13 @@ void Server::dealWrite(http::Conn* client) const {
 
     // 检查文件描述符的有效性
     if (fd <= 0) {
-        LOG_W("dealWrite called with invalid fd {}", fd);
+        LOG_D("dealWrite called with invalid fd {}", fd);
         return;
     }
 
     // 检查连接是否在_users映射中
     if (_users.count(fd) == 0) {
-        LOG_W("dealWrite called for fd {} but not found in _users", fd);
+        LOG_D("dealWrite called for fd {} but not found in _users", fd);
         return;
     }
 
@@ -552,35 +565,48 @@ void Server::dealWrite(http::Conn* client) const {
     uint64_t connId = client->GetConnId();
 
 #ifdef __V0
+    // 进一步验证文件描述符并检查是否已关闭
+    if (_isClose) {
+        LOG_D("Server is closing, skip adding write task for fd {}", fd);
+        return;
+    }
+
     // 直接使用fd和connId标识连接，不再尝试复制Conn对象
     _threadpool->AddTask([this, fd, connId] {
-        // 检查服务器是否已关闭
-        if (_isClose) {
-            LOG_W("Thread pool task aborted: server is closing");
-            return;
-        }
+        // 捕获任务执行时的潜在异常，防止线程崩溃
+        try {
+            // 检查服务器是否已关闭
+            if (_isClose) {
+                LOG_D("Thread pool task aborted: server is closing");
+                return;
+            }
 
-        // 检查连接是否仍然存在且ID匹配
-        if (_users.count(fd) == 0) {
-            LOG_W("Thread pool task aborted: fd {} no longer in _users map",
-                  fd);
-            return;
-        }
+            // 检查连接是否仍然存在且ID匹配
+            if (_users.count(fd) == 0) {
+                LOG_D("Thread pool task aborted: fd {} no longer in _users map",
+                      fd);
+                return;
+            }
 
-        if (_users[fd].connId != connId) {
-            LOG_W("Thread pool task aborted: connId mismatch for fd {} "
-                  "(expected {}, found {})",
-                  fd, connId, _users[fd].connId);
-            return;
-        }
+            if (_users[fd].connId != connId) {
+                LOG_D("Thread pool task aborted: connId mismatch for fd {} "
+                      "(expected {}, found {})",
+                      fd, connId, _users[fd].connId);
+                return;
+            }
 
-        // 确保文件描述符仍然有效
-        if (_users[fd].conn.GetFd() > 0) {
-            onWrite(&_users[fd].conn);
-        } else {
-            LOG_W("Thread pool task found invalid fd in conn object for fd "
-                  "{}, connId {}",
-                  fd, connId);
+            // 确保文件描述符仍然有效
+            if (_users[fd].conn.GetFd() > 0) {
+                onWrite(&_users[fd].conn);
+            } else {
+                LOG_D("Thread pool task found invalid fd in conn object for fd "
+                      "{}, connId {}",
+                      fd, connId);
+            }
+        } catch (const std::exception& e) {
+            LOG_E("Exception in dealWrite thread pool task: {}", e.what());
+        } catch (...) {
+            LOG_E("Unknown exception in dealWrite thread pool task");
         }
     });
 #elif
