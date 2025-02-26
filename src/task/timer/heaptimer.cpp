@@ -6,13 +6,13 @@
 
 namespace zener::v0 {
 
-imer::imer() {
+Timer::Timer() {
     // std::vector::reserve 用于为 std::vector
     // 预先分配至少能容纳指定数量元素的内存空间
     _heap.reserve(64);
 }
 
-void imer::siftUp(size_t i) {
+void Timer::siftUp(size_t i) {
     assert(i >= 0 && i < _heap.size()); // size_t 永远 >= 0 此处代码有点抽象
     size_t j = (i - 1) / 2;
     while (i > 0) { // 修改为检查i而不是j，防止size_t下溢
@@ -25,7 +25,7 @@ void imer::siftUp(size_t i) {
     }
 }
 
-void imer::swapNode(size_t i, size_t j) {
+void Timer::swapNode(size_t i, size_t j) {
     assert(i >= 0 && i < _heap.size());
     assert(j >= 0 && j < _heap.size());
     std::swap(_heap[i], _heap[j]);
@@ -33,7 +33,7 @@ void imer::swapNode(size_t i, size_t j) {
     _ref[_heap[j].id] = j;
 }
 
-bool imer::siftDown(size_t index, size_t n) {
+bool Timer::siftDown(size_t index, size_t n) {
     assert(index >= 0 && index < _heap.size());
     assert(n >= 0 && n <= _heap.size());
     size_t i = index;
@@ -50,7 +50,7 @@ bool imer::siftDown(size_t index, size_t n) {
     return i > index;
 }
 
-void imer::Add(int id, int timeout, const TimeoutCallBack& cb) {
+void Timer::Add(int id, int timeout, const TimeoutCallBack& cb) {
     assert(id >= 0);
     size_t i;
     if (_ref.count(id) == 0) {
@@ -70,7 +70,7 @@ void imer::Add(int id, int timeout, const TimeoutCallBack& cb) {
     }
 }
 
-void imer::doWork(int id) {
+void Timer::doWork(int id) {
     /* 删除指定id结点，并触发回调函数 */
     if (_heap.empty() || _ref.count(id) == 0) {
         return;
@@ -81,7 +81,7 @@ void imer::doWork(int id) {
     del(i);
 }
 
-void imer::del(size_t index) {
+void Timer::del(size_t index) {
     /* 删除指定位置的结点 */
     assert(!_heap.empty() && index >= 0 && index < _heap.size());
     /* 将要删除的结点换到队尾，然后调整堆 */
@@ -99,7 +99,7 @@ void imer::del(size_t index) {
     _heap.pop_back();
 }
 
-void imer::Adjust(int id, int timeout) {
+void Timer::Adjust(int id, int timeout) {
     /* 调整指定id的结点 */
     assert(!_heap.empty() && _ref.count(id) > 0);
     _heap[_ref[id]].expires = Clock::now() + MS(timeout);
@@ -107,7 +107,7 @@ void imer::Adjust(int id, int timeout) {
     siftDown(_ref[id], _heap.size());
 }
 
-void imer::Tick() {
+void Timer::Tick() {
     /* 清除超时结点 */
     if (_heap.empty()) {
         return;
@@ -123,19 +123,19 @@ void imer::Tick() {
     }
 }
 
-void imer::Pop() {
+void Timer::Pop() {
     if (_heap.empty()) {
         return; // 如果堆为空，直接返回，避免断言失败
     }
     del(0);
 }
 
-void imer::Clear() {
+void Timer::Clear() {
     _ref.clear();
     _heap.clear();
 }
 
-int imer::GetNextTick() {
+int Timer::GetNextTick() {
     Tick();
     int res = -1;
     if (!_heap.empty()) {

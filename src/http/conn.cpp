@@ -31,7 +31,7 @@ void Conn::init(int fd, const sockaddr_in& addr) {
     _writeBuff.RetrieveAll();
     _readBuff.RetrieveAll();
     _isClose = false;
-    LOG_I("Client {0} {1} in, userCount: {2}", _fd, GetIP(), GetPort(),
+    LOG_I("Client [{0} - {1} {2}] in, userCount: {3}", _fd, GetIP(), GetPort(),
           userCount.load());
 }
 
@@ -41,7 +41,7 @@ void Conn::Close() {
         _isClose = true;
         --userCount;
         close(_fd);
-        LOG_I("Client {0} {1} quit, userCount: {2}", _fd, GetIP(), GetPort(),
+        LOG_I("Client [{0} - {1} {2}] quit, userCount: {3}", _fd, GetIP(), GetPort(),
               userCount.load());
     }
 }
@@ -106,7 +106,7 @@ bool Conn::process() {
         _iov[1].iov_len = _response.FileLen();
         _iovCnt = 2;
     }
-    LOG_D("filesize: {0}, {1} to {2}", _response.FileLen(), _iovCnt,
+    LOG_D("Filesize: {0}, {1} to {2}.", _response.FileLen(), _iovCnt,
           ToWriteBytes());
     return true;
 }
