@@ -68,14 +68,9 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     // 此处是手动拼接的
     // 需要配置完整的路径
     const auto logDir = GET_CONFIG("log.dir");   // logs
-    const auto logName = GET_CONFIG("log.name"); // "test.log"
-    const std::string logPath = _cwd + "/" + logDir + "/" + logName; // 绝对路径
-    if (mkdir((_cwd + "/" + logDir).c_str(), 0777) != 0 && errno != EEXIST) {
-        LOG_E("Failed to create log directory: {}", _cwd + "/" + logDir);
-        return;
-    }
-    if (!Logger::WriteToFile(logPath)) {
-        LOG_E("Failed to create log file: {}", logPath);
+    const std::string fullLogDir = _cwd + "/" + logDir;
+    if (!Logger::WriteToFile(fullLogDir)) {
+        LOG_E("Failed to create log file in directory: {}", fullLogDir);
         return;
     }
     LOG_I("Server Init ===========================>");
@@ -249,7 +244,7 @@ void Server::Shutdown(const int timeoutMS) {
 void Server::sendError(int fd, const char* info) {
     assert(fd > 0);
     if (const auto ret = send(fd, info, strlen(info), 0); ret > 0) {
-        LOG_W("send error to client {} error!", fd);
+        LOG_W("Send error to client {0} error! {2}", fd, info, strerror(errno));
     }
     close(fd);
 }

@@ -31,7 +31,7 @@ void Conn::init(int fd, const sockaddr_in& addr) {
     _writeBuff.RetrieveAll();
     _readBuff.RetrieveAll();
     _isClose = false;
-    LOG_I("Client [{0} - {1} {2}] in, userCount: {3}", _fd, GetIP(), GetPort(),
+    LOG_I("Client {0} [{1}:{2}] in, userCount: {3}", _fd, GetIP(), GetPort(),
           userCount.load());
 }
 
@@ -41,7 +41,7 @@ void Conn::Close() {
         _isClose = true;
         --userCount;
         close(_fd);
-        LOG_I("Client [{0} - {1} {2}] quit, userCount: {3}", _fd, GetIP(), GetPort(),
+        LOG_I("Client {0} [{1}:{2}] quit, userCount: {3}", _fd, GetIP(), GetPort(),
               userCount.load());
     }
 }
