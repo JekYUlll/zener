@@ -128,30 +128,16 @@ void Server::initEventMode(const int trigMode) {
 
 // TODO 改为自己的 timer 实现，替换为红黑树
 void Server::Start() {
-    int timeMS = -1; // -1 means wait indefinitely
-    if (!_isClose) {
-        LOG_I("========== Server start ==========");
-        LOG_I("listen fd: {}, thread pool: {:p}", _listenFd,
-              (void*)_threadpool.get());
+    int timeMS = -1; // 默认不超时，一直阻塞，直到有事件发生
+    if (_timeoutMS > 0) {
+        timeMS = _timeoutMS;
     }
+    LOG_I(
+        "Server Start | Port : {0}, timeout: {1}ms ==========================>",
+        _port, _timeoutMS);
 
-    // 创建一个后台线程，定期清理文件缓存
-    _threadpool->AddTask([this]() {
-        const int FILE_CACHE_CLEANUP_INTERVAL_SEC = 300; // 每5分钟清理一次
-        while (!_isClose) {
-            // 清理超过120秒未使用的文件缓存
-            try {
-                LOG_I("Starting periodic file cache cleaning...");
-                zener::http::FileCache::GetInstance().CleanupCache(120);
-                LOG_I("File cache cleaning completed");
-            } catch (const std::exception& e) {
-                LOG_E("File cache cleaning exception: {}", e.what());
-            }
-            // 等待一段时间再次清理
-            std::this_thread::sleep_for(
-                std::chrono::seconds(FILE_CACHE_CLEANUP_INTERVAL_SEC));
-        }
-    });
+    // 删除file_cache清理线程，这不应该影响正常处理
+    // 因为文件缓存可以在使用时被检查，而不需要独立线程
 
     while (!_isClose) {
         if (_timeoutMS > 0) {
@@ -183,9 +169,7 @@ void Server::Start() {
                     closeConn(&it->second.conn);
                 } else {
                     // 从epoll中删除并关闭
-                    if (!_epoller->DelFd(fd)) {
-                        LOG_E("从epoll中删除fd {}失败", fd);
-                    }
+                    _epoller->DelFd(fd);
                     close(fd);
                 }
             } else if (events & EPOLLIN) {
@@ -195,9 +179,7 @@ void Server::Start() {
                     dealRead(&it->second.conn);
                 } else {
                     // 从epoll中删除并关闭
-                    if (!_epoller->DelFd(fd)) {
-                        LOG_E("从epoll中删除fd {}失败", fd);
-                    }
+                    _epoller->DelFd(fd);
                     close(fd);
                 }
             } else if (events & EPOLLOUT) {
@@ -207,9 +189,7 @@ void Server::Start() {
                     dealWrite(&it->second.conn);
                 } else {
                     // 从epoll中删除并关闭
-                    if (!_epoller->DelFd(fd)) {
-                        LOG_E("从epoll中删除fd {}失败", fd);
-                    }
+                    _epoller->DelFd(fd);
                     close(fd);
                 }
             } else {
@@ -636,20 +616,45 @@ void Server::onWrite(http::Conn* client) const {
     int writeErrno = 0;
 
     ret = client->write(&writeErrno);
+
+    // 扩展连接超时时间，防止大文件传输中连接被关闭
+    extentTime(client);
+
     if (client->ToWriteBytes() == 0) { // 传输完成
         if (client->IsKeepAlive()) {
+            // 如果是保持连接的，重新准备接收新的请求
             onProcess(client);
             return;
         }
-    } else if (ret < 0) {
-        if (writeErrno == EAGAIN) { // 继续传输
+        // 非保持连接，传输完成后关闭
+        closeConn(client);
+        return;
+    }
+
+    // 还有数据需要发送
+    if (ret < 0) {
+        if (writeErrno == EAGAIN || writeErrno == EWOULDBLOCK) {
+            // 内核发送缓冲区已满，需要等待可写事件
             if (!_epoller->ModFd(fd, _connEvent | EPOLLOUT)) {
-                LOG_E("Failed to mod fd {}!", fd);
+                LOG_E("修改fd {}为EPOLLOUT失败!", fd);
             }
             return;
         }
+        // 其他错误，关闭连接
+        LOG_E("写入错误 fd={}, connId={}, errno={}", fd, connId, writeErrno);
+        closeConn(client);
+        return;
     }
-    closeConn(client);
+
+    // ret >= 0 但还有数据需要发送，继续注册EPOLLOUT事件
+    if (client->ToWriteBytes() > 0) {
+        if (!_epoller->ModFd(fd, _connEvent | EPOLLOUT)) {
+            LOG_E("修改fd {}为EPOLLOUT失败!", fd);
+        }
+        LOG_D("文件数据部分发送: fd={}, connId={}, 已发送={}, 剩余={}", fd,
+              connId, ret, client->ToWriteBytes());
+        return;
+    }
 }
 
 void Server::extentTime(const http::Conn* client) const {
@@ -739,11 +744,22 @@ void Server::onRead(http::Conn* client) const {
     int ret = -1;
     int readErrno = 0;
     ret = client->read(&readErrno);
+
+    // 读取出错或连接关闭
     if (ret <= 0 && readErrno != EAGAIN) {
         closeConn(client);
         return;
     }
-    onProcess(client);
+
+    // 只有当确实读取到数据时才处理请求
+    if (ret > 0) {
+        onProcess(client);
+    } else {
+        // 如果没有数据，重新注册EPOLLIN事件
+        if (!_epoller->ModFd(fd, _connEvent | EPOLLIN)) {
+            LOG_E("Failed to mod fd {} for EPOLLIN!", fd);
+        }
+    }
 }
 
 void Server::onProcess(http::Conn* client) const {

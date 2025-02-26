@@ -115,8 +115,8 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
     的解决方案：将读取分散在两块区域，一块是`buffer`，一块是栈上的`extraBuf`（放置在栈上使得`extraBuf`随着`Read`的结束而释放，不会占用额外空间），当初始的小`buffer`放不下时才扩容
     */
 
-    // 使用固定大小的栈上缓冲区，减小栈上内存使用
-    constexpr size_t EXTRA_BUF_SIZE = 8192; // 减小到8KB以降低栈内存使用
+    // 使用更小的栈上缓冲区，减小栈上内存使用
+    constexpr size_t EXTRA_BUF_SIZE = 4096; // 减小到4KB以降低栈内存使用
     char extraBuff[EXTRA_BUF_SIZE];
 
     // struct iovec 用于进行分散 - 聚集 I/O（Scatter - Gather I/O）操作。
@@ -124,11 +124,12 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
     struct iovec iov[2];
     const size_t writable = WritableBytes();
 
-    // 检查 Buffer 是否有可写空间
-    if (writable == 0) {
-        // 如果 Buffer 已满，扩容后再读取
+    // 检查 Buffer 是否有可写空间，如果不足则进行适当扩容
+    if (writable < 1024) { // 如果可写空间小于1KB
+        // 扩容至少4KB空间，但不超过已用空间的两倍
+        size_t newSpace = std::max<size_t>(4096, ReadableBytes());
         try {
-            EnsureWritable(INIT_BUFFER_SIZE);
+            EnsureWritable(newSpace);
         } catch (const std::exception& e) {
             if (saveErrno) {
                 *saveErrno = ENOMEM;
@@ -138,14 +139,17 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
         }
     }
 
+    // 重新获取可写空间
+    const size_t updatedWritable = WritableBytes();
+
     // 分散读，保证数据读完
     iov[0].iov_base = GetWritePtr(); // 第一块指向 _buffer 里的 write_pos
-    iov[0].iov_len = writable;
+    iov[0].iov_len = updatedWritable;
     iov[1].iov_base = extraBuff; // 第二块指向栈上的 extraBuff
     iov[1].iov_len = EXTRA_BUF_SIZE;
 
     // 判断需要写入几个缓冲区
-    const int iovCnt = (writable < EXTRA_BUF_SIZE) ? 2 : 1;
+    const int iovCnt = (updatedWritable < EXTRA_BUF_SIZE) ? 2 : 1;
     const ssize_t len = readv(fd, iov, iovCnt);
 
     if (len < 0) {
@@ -154,7 +158,7 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
         }
     } else if (len == 0) {
         // 连接已关闭，不做任何处理
-    } else if (static_cast<size_t>(len) <= writable) {
+    } else if (static_cast<size_t>(len) <= updatedWritable) {
         // 数据完全写入第一个缓冲区，使用原子操作更新写位置
         size_t newPos = _writePos.load(std::memory_order_acquire) + len;
         _writePos.store(newPos, std::memory_order_release);
@@ -164,7 +168,7 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
         _writePos.store(_buffer.size(), std::memory_order_release);
 
         // 计算写入第二个缓冲区的数据量
-        size_t extraLen = len - writable;
+        size_t extraLen = len - updatedWritable;
 
         // 确保不超出 extraBuff 的大小
         if (extraLen > EXTRA_BUF_SIZE) {

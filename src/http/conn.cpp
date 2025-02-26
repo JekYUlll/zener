@@ -5,7 +5,6 @@
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
-#include <cstdint>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/uio.h>
@@ -58,13 +57,36 @@ void Conn::Close() {
 
 ssize_t Conn::read(int* saveErrno) {
     ssize_t len = -1;
+    ssize_t totalLen = 0;
+    int maxIterations = 8; // 限制最大读取次数，防止一直读取导致其他连接饥饿
+    int iterations = 0;
+
     do {
         len = _readBuff.ReadFd(_fd, saveErrno);
-        if (len <= 0) {
+        if (len > 0) {
+            totalLen += len;
+            iterations++;
+            // 如果读取了足够多的数据，可以考虑在下一个事件循环中继续处理
+            if (totalLen > 65536) { // 64KB
+                break;
+            }
+        } else if (len == 0) {
+            // 连接关闭
+            *saveErrno = ECONNRESET;
             break;
+        } else {
+            // len < 0, 出错情况
+            if (*saveErrno == EAGAIN || *saveErrno == EWOULDBLOCK) {
+                // 非阻塞模式下，所有数据已读完
+                break;
+            }
+            return len;
         }
-    } while (isET); // 如果是边缘触发，需要多次读
-    return len;
+    } while (isET &&
+             (iterations <
+              maxIterations)); // ET模式需要循环读取，但添加最大迭代次数限制
+
+    return totalLen > 0 ? totalLen : len;
 }
 
 ssize_t Conn::write(int* saveErrno) {
@@ -171,75 +193,79 @@ ssize_t Conn::write(int* saveErrno) {
 }
 
 bool Conn::process() {
-    _request.Init();
-    LOG_D("Processing connection fd={}, connId={}: initializing request", _fd,
-          _connId);
-
+    // 1. 如果读缓冲区为空，直接返回false，不进行后续处理
     if (_readBuff.ReadableBytes() <= 0) {
-        LOG_W("Processing connection fd={}, connId={}: read buffer is empty",
-              _fd, _connId);
+        // 降级为调试信息，这是正常情况，不需要作为警告输出
+        LOG_D("处理连接 fd={}, connId={}: 读缓冲区为空", _fd, _connId);
         return false;
-    } else if (_request.parse(_readBuff)) {
-        LOG_D("{}", _request.path().c_str());
-        LOG_D("Processing connection fd={}, connId={}: parsing successful, "
-              "request path={}",
-              _fd, _connId, _request.path());
+    }
 
-        // 在处理响应前确保清除之前可能存在的文件映射
-        _response.UnmapFile();
+    _request.Init();
+    LOG_D("处理连接 fd={}, connId={}: 初始化请求", _fd, _connId);
+
+    // 2. 解析HTTP请求
+    bool parseSuccess = _request.parse(_readBuff);
+
+    // 在处理响应前确保清除之前可能存在的文件映射
+    _response.UnmapFile();
+
+    if (parseSuccess) {
+        LOG_D("处理连接 fd={}, connId={}: 解析成功, 请求路径={}", _fd, _connId,
+              _request.path());
         _response.Init(staticDir, _request.path(), _request.IsKeepAlive(), 200);
     } else {
-        LOG_W("Processing connection fd={}, connId={}: parsing failed, request "
-              "path={}",
-              _fd, _connId, _request.path().c_str());
+        LOG_W("处理连接 fd={}, connId={}: 解析失败, 请求路径={}", _fd, _connId,
+              _request.path().c_str());
         _response.Init(staticDir, _request.path(), false, 400);
     }
 
-    LOG_D("Processing connection fd={}, connId={}: preparing to generate "
-          "response",
-          _fd, _connId);
+    LOG_D("处理连接 fd={}, connId={}: 准备生成响应", _fd, _connId);
 
+    // 3. 生成HTTP响应
     try {
         _response.MakeResponse(_writeBuff);
     } catch (const std::exception& e) {
-        LOG_E("Exception while generating response: {}, fd={}, connId={}",
-              e.what(), _fd, _connId);
+        LOG_E("生成响应时发生异常: {}, fd={}, connId={}", e.what(), _fd,
+              _connId);
         return false;
     }
 
-    // 响应头
-    LOG_D("Processing connection fd={}, connId={}: setting response header "
-          "buffer, read bytes in write buffer={}",
+    // 4. 如果写缓冲区为空，可能是错误情况，返回false
+    if (_writeBuff.ReadableBytes() == 0) {
+        LOG_D("处理连接 fd={}, connId={}: 写缓冲区为空, 无响应数据", _fd,
+              _connId);
+        return false;
+    }
+
+    // 5. 设置响应头
+    LOG_D("处理连接 fd={}, connId={}: 设置响应头缓冲区, 写缓冲区可读字节={}",
           _fd, _connId, _writeBuff.ReadableBytes());
 
-    // 确保iov设置正确
+    // 设置iov以便后续的writev调用
     _iovCnt = 0;
     if (_writeBuff.ReadableBytes() > 0) {
         _iov[0].iov_base = _writeBuff.Peek();
         _iov[0].iov_len = _writeBuff.ReadableBytes();
         _iovCnt = 1;
 
-        LOG_D("Processing connection fd={}, connId={}: iov[0] setup - "
-              "base={:p}, length={}",
-              _fd, _connId, _iov[0].iov_base, _iov[0].iov_len);
+        LOG_D("处理连接 fd={}, connId={}: iov[0]设置 - 基址={:p}, 长度={}", _fd,
+              _connId, _iov[0].iov_base, _iov[0].iov_len);
     }
 
-    // 文件
+    // 6. 设置文件响应（如果有）
     if (_response.File() && _response.FileLen() > 0) {
-        LOG_D("Processing connection fd={}, connId={}: adding file to iov - "
-              "base={:p}, length={}",
-              _fd, _connId, _iov[1].iov_base, _iov[1].iov_len);
+        _iov[1].iov_base = _response.File();
+        _iov[1].iov_len = _response.FileLen();
         _iovCnt = 2;
-    } else {
-        LOG_D("Processing connection fd={}, connId={}: no file or file length "
-              "is 0, File pointer={:p}, "
-              "file length={}",
-              _fd, _connId, (void*)_response.File(), _response.FileLen());
+
+        LOG_D("处理连接 fd={}, connId={}: iov[1]设置 - 基址={:p}, 长度={}", _fd,
+              _connId, _iov[1].iov_base, _iov[1].iov_len);
     }
 
-    LOG_D("Processing connection fd={}, connId={}: file size={}, iov count={}, "
-          "total bytes to write={}",
-          _fd, _connId, _response.FileLen(), _iovCnt, ToWriteBytes());
+    LOG_D("处理连接 fd={}, connId={}: 完成请求处理，总响应大小={}字节", _fd,
+          _connId,
+          _writeBuff.ReadableBytes() + (_iovCnt == 2 ? _iov[1].iov_len : 0));
+
     return true;
 }
 
