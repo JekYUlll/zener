@@ -1,5 +1,5 @@
-#ifndef LOG_H
-#define LOG_H
+#ifndef ZENER_SPD_LOGGER_H
+#define ZENER_SPD_LOGGER_H
 
 #include "spdlog/common.h"
 #include <atomic>
@@ -53,4 +53,4 @@ class Logger {
 
 } // namespace zener
 
-#endif // LOG_H
+#endif // !ZENER_SPD_LOGGER_H

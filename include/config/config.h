@@ -34,7 +34,7 @@ struct Config {
 
     static void Print();
 
-    static const std::string& GetConfig(const std::string& key) ;
+    static const std::string& GetConfig(const std::string& key);
     // 加锁的版本，多线程用
     const std::string& GetConfigSafe(const std::string& key) const;
 

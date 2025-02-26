@@ -2,6 +2,7 @@
 #define ZENER_MULTIMAP_TIMER_H
 // https://www.bilibili.com/video/BV1dP411r7Lf?spm_id_from=333.788.videopod.episodes&vd_source=9b0b9cbfd8c349b95b4776bd10953f3a&p=3
 // 基于 std::multimap 红黑树的定时器
+#include "common.h"
 #include "task/timer/Itimer.h"
 
 #include <cstdint>
@@ -42,7 +43,7 @@ void Timer::Callback(const int milliseconds, F&& f, Args&&... args) {
 
 class TimerManager final : public ITimerManager {
   public:
-    static TimerManager& GetInstance() {
+    _ZENER_SHORT_FUNC static TimerManager& GetInstance() {
         static TimerManager instance;
         return instance;
     }

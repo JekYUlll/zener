@@ -66,7 +66,7 @@ elseif(MSVC)
 endif()
 
 # 定时器实现选择 - 使用单一选项更便于管理
-set(TIMER_IMPLEMENTATION "MAP" CACHE STRING "Timer implementation to use (MAP or HEAP)")
+set(TIMER_IMPLEMENTATION "HEAP" CACHE STRING "Timer implementation to use (MAP or HEAP)")
 set_property(CACHE TIMER_IMPLEMENTATION PROPERTY STRINGS "MAP" "HEAP")
 
 if(TIMER_IMPLEMENTATION STREQUAL "MAP")

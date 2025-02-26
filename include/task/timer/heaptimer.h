@@ -1,7 +1,8 @@
 #ifndef ZENER_HEAP_TIMER_H
 #define ZENER_HEAP_TIMER_H
 /// webserver 默认实现
-/// 小根堆定时器
+/// 小根堆定时器 用于超时控制
+#include "common.h"
 #include "task/timer/Itimer.h"
 
 #include <chrono>
@@ -19,16 +20,18 @@ typedef Clock::time_point TimeStamp;
 
 struct TimerNode {
     int id;
-    TimeStamp expires;
-    TimeoutCallBack callback;
-    bool operator<(const TimerNode& other) const { return expires < other.expires; }
+    TimeStamp expires;        // 超时时间
+    TimeoutCallBack callback; // 超时回调
+    bool operator<(const TimerNode& other) const {
+        return expires < other.expires;
+    }
 };
 
-class HeapTimerManager; // 前置声明
+class HeapTimerManager;
 
 class HeapTimer {
   public:
-    friend class HeapTimerManager; // 声明HeapTimerManager为友元类
+    friend class HeapTimerManager;
 
     HeapTimer();
 
@@ -56,7 +59,7 @@ class HeapTimer {
 
 class HeapTimerManager final : public ITimerManager {
   public:
-    static HeapTimerManager& GetInstance() {
+    _ZENER_SHORT_FUNC static HeapTimerManager& GetInstance() {
         static HeapTimerManager instance;
         return instance;
     }
@@ -83,11 +86,13 @@ class HeapTimerManager final : public ITimerManager {
 
     // 基于业务ID取消定时器
     void CancelByKey(const int key) {
-        if (const auto it = _keyToTimerId.find(key); it != _keyToTimerId.end()) {
+        if (const auto it = _keyToTimerId.find(key);
+            it != _keyToTimerId.end()) {
             const int timerId = it->second;
             // 直接访问HeapTimer的私有成员
             if (_timer._ref.count(timerId) > 0) {
-                if (const size_t index = _timer._ref[timerId]; index < _timer._heap.size()) {
+                if (const size_t index = _timer._ref[timerId];
+                    index < _timer._heap.size()) {
                     _timer.del(index);
                 }
             }
@@ -104,7 +109,6 @@ class HeapTimerManager final : public ITimerManager {
                          Args&&... args) {
         // 先取消该key关联的旧定时器
         CancelByKey(key);
-
         auto callback = [this, key, func = std::forward<F>(f),
                          tup = std::make_tuple(std::forward<Args>(args)...)]() {
             // 执行回调前先检查key是否仍然有效
@@ -112,7 +116,6 @@ class HeapTimerManager final : public ITimerManager {
                 std::apply(func, tup);
             }
         };
-
         DoScheduleWithKey(key, milliseconds, repeat, callback);
     }
 
@@ -137,7 +140,6 @@ class HeapTimerManager final : public ITimerManager {
 };
 
 } // namespace v0
-
 
 } // namespace zener
 

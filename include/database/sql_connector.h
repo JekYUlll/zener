@@ -29,7 +29,7 @@ static constexpr int SQL_CONN_SIZE = 8;
 
 class SqlConnector {
   public:
-    static SqlConnector& GetInstance();
+    [[nodiscard]] static SqlConnector& GetInstance();
 
     SqlConnector(const SqlConnector& other) = delete;
     SqlConnector& operator=(const SqlConnector& rhs) = delete;
@@ -51,7 +51,6 @@ class SqlConnector {
   private:
     SqlConnector() = default;
 
-
     static int _maxConnSize; // 连接队列最大大小
     std::queue<MYSQL*> _connQue;
     int _useCount{};
@@ -63,6 +62,5 @@ class SqlConnector {
 };
 
 } // namespace zener::db
-
 
 #endif // !ZENER_SQL_CONNECT_POOL_H

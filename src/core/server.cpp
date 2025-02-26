@@ -4,6 +4,8 @@
 #include "database/sql_connector.h"
 #include "http/conn.h"
 #include "task/threadpool_1.h"
+#include "task/timer/maptimer.h"
+#include "task/timer/timer.h"
 #include "utils/log/logger.h"
 
 #include <asm-generic/socket.h>
@@ -187,7 +189,7 @@ void Server::Start() {
 }
 
 void Server::Stop() {
-    if (close(_listenFd) != 0) { // 可能多余
+    if (close(_listenFd) != 0) {
         LOG_E("Failed to close listen fd {0} : {1}", _listenFd,
               strerror(errno));
     }
@@ -259,7 +261,9 @@ void Server::closeConn(http::Conn* client) const {
     // 1. 先从定时器映射中删除该fd关联的定时器
     if (_timeoutMS > 0) {
         try {
+            // TODO
             HeapTimerManager::GetInstance().CancelByKey(fd);
+            // TimerManagerImpl::GetInstance().;
         } catch (const std::exception& e) {
             LOG_E("Exception when canceling timer for fd {}: {}", fd, e.what());
         } catch (...) {
@@ -295,11 +299,10 @@ void Server::addClient(int fd, const sockaddr_in& addr) const {
 }
 
 void Server::dealListen() const {
-    struct sockaddr_in addr{};
+    struct sockaddr_in addr {};
     socklen_t len = sizeof(addr);
     do {
-        const int fd =
-            accept(_listenFd, reinterpret_cast<struct sockaddr*>(&addr), &len);
+        const int fd = accept(_listenFd, reinterpret_cast<struct sockaddr*>(&addr), &len);
         if (fd <= 0) {
             return;
         }
@@ -336,6 +339,8 @@ void Server::extentTime(const http::Conn* client) const {
     assert(client);
     if (_timeoutMS > 0) {
         // 使用ScheduleWithKey，确保每个文件描述符只有一个定时器
+        // TODO
+        TimerManagerImpl::GetInstance().;
         HeapTimerManager::GetInstance().ScheduleWithKey(
             client->GetFd(), _timeoutMS, 0, [this, fd = client->GetFd()]() {
                 // 由于lambda可能在Server对象销毁后执行，需要安全处理
@@ -395,7 +400,7 @@ void Server::onWrite(http::Conn* client) const {
 /* Create listenFd */
 bool Server::initSocket() {
     int ret = 0;
-    struct sockaddr_in addr{};
+    struct sockaddr_in addr {};
     if (_port > 65535 || _port < 1024) {
         LOG_E("Port: {} is invalid!", _port);
         return false;

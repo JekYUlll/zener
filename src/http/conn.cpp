@@ -11,7 +11,6 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-
 namespace zener::http {
 
 const char* Conn::staticDir;
@@ -54,7 +53,7 @@ ssize_t Conn::read(int* saveErrno) {
         if (len <= 0) {
             break;
         }
-    } while (isET); // 如果是边缘触发，需要多次读。
+    } while (isET); // 如果是边缘触发，需要多次读
     return len;
 }
 
@@ -69,15 +68,15 @@ ssize_t Conn::write(int* saveErrno) {
         if (_iov[0].iov_len + _iov[1].iov_len == 0) {
             break; // 传输结束
         } else if (static_cast<size_t>(len) > _iov[0].iov_len) {
-            _iov[1].iov_base =
-                static_cast<uint8_t *>(_iov[1].iov_base) + (len - _iov[0].iov_len);
+            _iov[1].iov_base = static_cast<uint8_t*>(_iov[1].iov_base) +
+                               (len - _iov[0].iov_len);
             _iov[1].iov_len -= (len - _iov[0].iov_len);
             if (_iov[0].iov_len) {
                 _writeBuff.RetrieveAll();
                 _iov[0].iov_len = 0;
             }
         } else {
-            _iov[0].iov_base = static_cast<uint8_t *>(_iov[0].iov_base) + len;
+            _iov[0].iov_base = static_cast<uint8_t*>(_iov[0].iov_base) + len;
             _iov[0].iov_len -= len;
             _writeBuff.RetrieveAll();
         }

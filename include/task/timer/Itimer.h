@@ -29,7 +29,7 @@ class ITimerManager {
 
     virtual void Tick() = 0; // 在单独线程中循环处理定时器
 
-    virtual void Stop() = 0;  // 停止定时器
+    virtual void Stop() = 0; // 停止定时器
 
     virtual int GetNextTick() = 0; // 获取下一个定时事件的超时时间（毫秒）
 
@@ -37,12 +37,10 @@ class ITimerManager {
     // 模板方法的实现，由子类提供
     template <typename F, typename... Args>
     void DoScheduleImpl(int milliseconds, int repeat, F&& f, Args&&... args) {
-        // 使用auto直接推导lambda类型，避免std::function的开销
         auto callback = [func = std::forward<F>(f),
                          tup = std::make_tuple(std::forward<Args>(args)...)]() {
             std::apply(func, tup);
         };
-
         DoSchedule(milliseconds, repeat, callback);
     }
 
