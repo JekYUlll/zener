@@ -52,8 +52,8 @@ void Logger::Init() {
 
 // 生成包含日期的日志文件名
 std::string Logger::GenerateLogFileName(const std::string& prefix) {
-    auto now = std::chrono::system_clock::now();
-    auto now_time = std::chrono::system_clock::to_time_t(now);
+    const auto now = std::chrono::system_clock::now();
+    const auto now_time = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
     ss << prefix << "_";
     ss << std::put_time(std::localtime(&now_time), "%Y-%m-%d");
@@ -70,38 +70,31 @@ bool Logger::WriteToFile(const std::string_view logDir,
     if (!_sInitialized || !sSpdLogger) {
         return false;
     }
-
     try {
-        // 保存日志目录
         _logDirectory = logDir;
         _filePrefix = prefix;
 
-        // 创建日志目录(如果不存在)
-        std::filesystem::path dirPath(_logDirectory);
-        if (!std::filesystem::exists(dirPath)) {
-            if (!std::filesystem::create_directories(dirPath)) {
+        const std::filesystem::path dirPath(_logDirectory);
+        if (!exists(dirPath)) { // 创建日志目录(如果不存在)
+            if (!create_directories(dirPath)) {
                 std::cerr << "Failed to create log directory: " << _logDirectory
                           << std::endl;
                 return false;
             }
         }
-
-        // 生成基于日期的日志文件名
-        std::string fileName = GenerateLogFileName(std::string(_filePrefix));
-        std::filesystem::path fullPath = dirPath / fileName;
+        const std::string fileName = GenerateLogFileName(std::string(_filePrefix));
+        const std::filesystem::path fullPath = dirPath / fileName;
         _logFileName = fullPath.string();
 
-        // 检查文件是否存在，决定是追加还是新建
-        bool fileExists = std::filesystem::exists(fullPath);
+        const bool fileExists = exists(fullPath);
 
-        // 创建控制台和文件输出
-        auto console_sink =
+        const auto console_sink =
             std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
+        const auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
             _logFileName, false); // false表示追加模式，true表示截断模式（坑爹）
 
         std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
-        auto new_logger = std::make_shared<spdlog::logger>(
+        const auto new_logger = std::make_shared<spdlog::logger>(
             "main", sinks.begin(), sinks.end());
 
         new_logger->set_level(sSpdLogger->level());
@@ -112,7 +105,6 @@ bool Logger::WriteToFile(const std::string_view logDir,
 
         sSpdLogger = new_logger;
 
-        // 如果是续写已存在的文件，添加分隔符
         if (fileExists) {
             sSpdLogger->info("====================Append to existing "
                              "log====================");
@@ -131,11 +123,9 @@ bool Logger::WriteToFile(const std::string_view logDir,
 
 void Logger::SetLogFilePath(const std::string_view fileName) {
     // 提取目录部分
-    std::filesystem::path filePath(fileName);
-    auto parentPath = filePath.parent_path().string();
-
-    // 使用新接口，根据日期自动生成文件名
-    WriteToFile(parentPath.empty() ? "." : parentPath);
+    const std::filesystem::path filePath(fileName);
+    const auto parentPath = filePath.parent_path().string();
+    WriteToFile(parentPath.empty() ? "." : parentPath); // 使用新接口，根据日期自动生成文件名
 }
 
 void Logger::Flush() {

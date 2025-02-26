@@ -28,6 +28,7 @@ void SqlConnector::Init(const char* host, const unsigned int port,
         if (!sql) {
             LOG_E("MYSQL connect error! -{}", __FUNCTION__);
         }
+        LOG_I("Connected {} to MYSQL. database: {}.", i, dbName);
         _connQue.push(sql);
     }
     _maxConnSize = size;

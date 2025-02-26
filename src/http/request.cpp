@@ -93,7 +93,7 @@ bool Request::ParseRequestLine_(const std::string& line) {
         state_ = HEADERS;
         return true;
     }
-    LOG_E("RequestLine Error");
+    LOG_E("RequestLine Error! line: {}", line);
     return false;
 }
 

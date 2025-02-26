@@ -6,8 +6,7 @@
 #include "utils/hash.hpp"
 #include "utils/log/logger.h"
 
-// 实际上没有用到
-#define ZENER_CONFIG_FILEPATH "config.toml"
+#define ZENER_CONFIG_FILEPATH "config.toml" // 实际上没有用到
 
 #ifdef __USE_STRING
 namespace zener {

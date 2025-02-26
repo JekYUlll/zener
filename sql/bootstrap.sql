@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS user (
     password char(50) NULL
 )ENGINE=InnoDB;
 
-INSERT INTO user(username, password) VALUES('name', 'password');
+INSERT INTO user(username, password) VALUES('evan', '011745');
 
 -- CREATE TABLE IF NOT EXISTS 'users' (
 --     `id` BIGINT(20) NOT NULL COMMENT '用户唯一标识'

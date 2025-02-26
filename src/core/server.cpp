@@ -6,6 +6,7 @@
 #include "task/threadpool_1.h"
 #include "task/timer/timer.h"
 #include "utils/log/logger.h"
+#include "utils/defer.h"
 
 #include <asm-generic/socket.h>
 #include <atomic>
@@ -53,27 +54,30 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     http::Conn::staticDir = _staticDir.c_str(); // 似乎不太安全？不过 _staticDir
                                                 // 之后不会修改了，理论上没问题
 
-    db::SqlConnector::GetInstance().Init(sqlHost, sqlPort, sqlUser, sqlPwd,
-                                         dbName, connPoolNum);
-
     initEventMode(trigMode);
 
     if (!initSocket()) {
         _isClose = true;
     }
+
+    db::SqlConnector::GetInstance().Init(sqlHost, sqlPort, sqlUser, sqlPwd,
+                                         dbName, connPoolNum);
     // TODO
     // 检查 log 是否初始化，如果没有，直接不打印 LOG
     // 或者控制是否打印至文件
-    // TODO 修改 log 类，使其自动拼接，并且存储一个 dir。 log.name
-    // 此处是手动拼接的
-    // 需要配置完整的路径
-    const auto logDir = GET_CONFIG("log.dir"); // logs
+    // 此处直接写死日志位置： ${cwd}/logs/xxx.log
+    const std::string logDir = "logs";
     const std::string fullLogDir = _cwd + "/" + logDir;
     if (!Logger::WriteToFile(fullLogDir)) {
         LOG_E("Failed to create log file in directory: {}!", fullLogDir);
         return;
     }
     LOG_I("Server Init ===========================>");
+    LOG_I(" __________ _   _ _____ ____");
+    LOG_I("|__  / ____| \\ | | ____|  _ \\");
+    LOG_I("  / /|  _| |  \\| |  _| | |_) |");
+    LOG_I(" / /_| |___| |\\  | |___|  _ <");
+    LOG_I("/____|_____|_| \\_|_____|_| \\_\\");
     LOG_I("| port: {0}, OpenLinger: {1}", port, optLinger ? "true" : "false");
     LOG_I("| Listen Mode: {0}, OpenConn Mode: {1}",
           (_listenEvent & EPOLLET ? "ET" : "LT"),
@@ -125,7 +129,7 @@ void Server::Start() {
     assert(!_isClose);
     int timeMS = -1; /* epoll wait timeout == -1 无事件将阻塞 */
     if (!_isClose) {
-        LOG_I("Server start at {}", _port);
+        LOG_I("Server start at {}.", _port);
         while (!_isClose) {
             if (_timeoutMS > 0) {
                 timeMS = TimerManagerImpl::GetInstance().GetNextTick();
@@ -254,8 +258,6 @@ void Server::sendError(int fd, const char* info) {
 void Server::closeConn(http::Conn* client) const {
     assert(client);
     int fd = client->GetFd();
-    LOG_I("Client [{0} - {1} {2}] quit.", fd, client->GetIP(),
-          client->GetPort());
     // 1. 先从定时器映射中删除该fd关联的定时器
     if (_timeoutMS > 0) {
         try {
@@ -292,8 +294,6 @@ void Server::addClient(int fd, const sockaddr_in& addr) const {
             LOG_E("Failed to add client fd {}!", fd);
         }
         setFdNonblock(fd);
-        LOG_I("Client {} [{}:{}] in!", _users[fd].GetFd(), _users[fd].GetIP(),
-              _users[fd].GetPort());
     }
 }
 
@@ -464,8 +464,9 @@ bool Server::initSocket() {
         close(_listenFd);
         return false;
     }
-    setFdNonblock(_listenFd);
-    LOG_I("Server port: {}.", _port);
+    if(setFdNonblock(_listenFd) < 0) {
+        LOG_E("Failed to set fd {}! {}", _listenFd, strerror(errno));
+    }
     return true;
 }
 
