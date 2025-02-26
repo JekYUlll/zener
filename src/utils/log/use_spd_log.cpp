@@ -98,7 +98,7 @@ bool Logger::WriteToFile(const std::string_view logDir,
         auto console_sink =
             std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
-            _logFileName, true); // true表示追加模式
+            _logFileName, false); // false表示追加模式，true表示截断模式（坑爹）
 
         std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
         auto new_logger = std::make_shared<spdlog::logger>(
