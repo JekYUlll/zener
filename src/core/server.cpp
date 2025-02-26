@@ -131,7 +131,7 @@ void Server::Start() {
         LOG_I("Server start at {}", _port);
         while (!_isClose) {
             if (_timeoutMS > 0) {
-                timeMS = HeapTimerManager::GetInstance().GetNextTick();
+                timeMS = TimerManager::GetInstance().GetNextTick();
             }
             // 限制timeMS最大值，确保即使没有事件，epoll_wait也能定期返回检查_isClose标志
             if (timeMS < 0 || timeMS > 1000) {
@@ -261,9 +261,8 @@ void Server::closeConn(http::Conn* client) const {
     // 1. 先从定时器映射中删除该fd关联的定时器
     if (_timeoutMS > 0) {
         try {
-            // TODO
-            HeapTimerManager::GetInstance().CancelByKey(fd);
-            // TimerManagerImpl::GetInstance().;
+            // 使用TimerManagerImpl而不是具体实现类
+            TimerManagerImpl::GetInstance().CancelByKey(fd);
         } catch (const std::exception& e) {
             LOG_E("Exception when canceling timer for fd {}: {}", fd, e.what());
         } catch (...) {
@@ -284,7 +283,7 @@ void Server::addClient(int fd, const sockaddr_in& addr) const {
     assert(fd > 0);
     _users[fd].init(fd, addr);
     if (_timeoutMS > 0) {
-        HeapTimerManager::GetInstance().ScheduleWithKey(
+        TimerManager::GetInstance().ScheduleWithKey(
             fd, _timeoutMS, 0, [this, fd]() {
                 if (_users.count(fd) > 0) {
                     closeConn(&_users[fd]);
@@ -339,9 +338,7 @@ void Server::extentTime(const http::Conn* client) const {
     assert(client);
     if (_timeoutMS > 0) {
         // 使用ScheduleWithKey，确保每个文件描述符只有一个定时器
-        // TODO
-        TimerManagerImpl::GetInstance().;
-        HeapTimerManager::GetInstance().ScheduleWithKey(
+        TimerManagerImpl::GetInstance().ScheduleWithKey(
             client->GetFd(), _timeoutMS, 0, [this, fd = client->GetFd()]() {
                 // 由于lambda可能在Server对象销毁后执行，需要安全处理
                 if (!_isClose && _users.count(fd) > 0) {

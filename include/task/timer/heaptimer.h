@@ -27,15 +27,15 @@ struct TimerNode {
     }
 };
 
-class HeapTimerManager;
+class TimerManager;
 
-class HeapTimer {
+class Timer {
   public:
-    friend class HeapTimerManager;
+    friend class TimerManager;
 
-    HeapTimer();
+    Timer();
 
-    ~HeapTimer() { Clear(); }
+    ~Timer() { Clear(); }
 
     void Adjust(int id, int newExpires);
     void Add(int id, int timeOut, const TimeoutCallBack& cb);
@@ -57,16 +57,16 @@ class HeapTimer {
     std::unordered_map<int, size_t> _ref;
 };
 
-class HeapTimerManager final : public ITimerManager {
+class TimerManager final : public ITimerManager {
   public:
-    _ZENER_SHORT_FUNC static HeapTimerManager& GetInstance() {
-        static HeapTimerManager instance;
+    _ZENER_SHORT_FUNC static TimerManager& GetInstance() {
+        static TimerManager instance;
         return instance;
     }
 
-    HeapTimerManager(const HeapTimerManager&) = delete;
-    HeapTimerManager& operator=(HeapTimerManager&) = delete;
-    ~HeapTimerManager() override = default;
+    TimerManager(const TimerManager&) = delete;
+    TimerManager& operator=(TimerManager&) = delete;
+    ~TimerManager() override = default;
 
     // 更新定时器，处理到期任务
     void Update() override { _timer.Tick(); }
@@ -129,9 +129,9 @@ class HeapTimerManager final : public ITimerManager {
                            std::function<void()> cb);
 
   private:
-    HeapTimerManager() : _bClosed(false), _nextId(0) {}
+    TimerManager() : _bClosed(false), _nextId(0) {}
 
-    HeapTimer _timer;
+    Timer _timer;
     bool _bClosed;
     int _nextId; // 为每个计时器生成唯一ID
     std::unordered_map<int, std::pair<int, int>>

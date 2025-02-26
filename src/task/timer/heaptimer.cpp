@@ -6,13 +6,13 @@
 
 namespace zener::v0 {
 
-HeapTimer::HeapTimer() {
+imer::imer() {
     // std::vector::reserve 用于为 std::vector
     // 预先分配至少能容纳指定数量元素的内存空间
     _heap.reserve(64);
 }
 
-void HeapTimer::siftUp(size_t i) {
+void imer::siftUp(size_t i) {
     assert(i >= 0 && i < _heap.size()); // size_t 永远 >= 0 此处代码有点抽象
     size_t j = (i - 1) / 2;
     while (i > 0) { // 修改为检查i而不是j，防止size_t下溢
@@ -25,7 +25,7 @@ void HeapTimer::siftUp(size_t i) {
     }
 }
 
-void HeapTimer::swapNode(size_t i, size_t j) {
+void imer::swapNode(size_t i, size_t j) {
     assert(i >= 0 && i < _heap.size());
     assert(j >= 0 && j < _heap.size());
     std::swap(_heap[i], _heap[j]);
@@ -33,7 +33,7 @@ void HeapTimer::swapNode(size_t i, size_t j) {
     _ref[_heap[j].id] = j;
 }
 
-bool HeapTimer::siftDown(size_t index, size_t n) {
+bool imer::siftDown(size_t index, size_t n) {
     assert(index >= 0 && index < _heap.size());
     assert(n >= 0 && n <= _heap.size());
     size_t i = index;
@@ -50,7 +50,7 @@ bool HeapTimer::siftDown(size_t index, size_t n) {
     return i > index;
 }
 
-void HeapTimer::Add(int id, int timeout, const TimeoutCallBack& cb) {
+void imer::Add(int id, int timeout, const TimeoutCallBack& cb) {
     assert(id >= 0);
     size_t i;
     if (_ref.count(id) == 0) {
@@ -70,7 +70,7 @@ void HeapTimer::Add(int id, int timeout, const TimeoutCallBack& cb) {
     }
 }
 
-void HeapTimer::doWork(int id) {
+void imer::doWork(int id) {
     /* 删除指定id结点，并触发回调函数 */
     if (_heap.empty() || _ref.count(id) == 0) {
         return;
@@ -81,7 +81,7 @@ void HeapTimer::doWork(int id) {
     del(i);
 }
 
-void HeapTimer::del(size_t index) {
+void imer::del(size_t index) {
     /* 删除指定位置的结点 */
     assert(!_heap.empty() && index >= 0 && index < _heap.size());
     /* 将要删除的结点换到队尾，然后调整堆 */
@@ -99,7 +99,7 @@ void HeapTimer::del(size_t index) {
     _heap.pop_back();
 }
 
-void HeapTimer::Adjust(int id, int timeout) {
+void imer::Adjust(int id, int timeout) {
     /* 调整指定id的结点 */
     assert(!_heap.empty() && _ref.count(id) > 0);
     _heap[_ref[id]].expires = Clock::now() + MS(timeout);
@@ -107,7 +107,7 @@ void HeapTimer::Adjust(int id, int timeout) {
     siftDown(_ref[id], _heap.size());
 }
 
-void HeapTimer::Tick() {
+void imer::Tick() {
     /* 清除超时结点 */
     if (_heap.empty()) {
         return;
@@ -123,19 +123,19 @@ void HeapTimer::Tick() {
     }
 }
 
-void HeapTimer::Pop() {
+void imer::Pop() {
     if (_heap.empty()) {
         return; // 如果堆为空，直接返回，避免断言失败
     }
     del(0);
 }
 
-void HeapTimer::Clear() {
+void imer::Clear() {
     _ref.clear();
     _heap.clear();
 }
 
-int HeapTimer::GetNextTick() {
+int imer::GetNextTick() {
     Tick();
     int res = -1;
     if (!_heap.empty()) {
@@ -150,7 +150,7 @@ int HeapTimer::GetNextTick() {
 }
 
 // HeapTimerManager的DoSchedule实现
-void HeapTimerManager::DoSchedule(int milliseconds, int repeat,
+void TimerManager::DoSchedule(int milliseconds, int repeat,
                                   std::function<void()> cb) {
     int id = _nextId++;
 
@@ -190,7 +190,7 @@ void HeapTimerManager::DoSchedule(int milliseconds, int repeat,
 }
 
 // 使用业务key的定时器调度实现
-void HeapTimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
+void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
                                          std::function<void()> cb) {
     int id = _nextId++;
 
