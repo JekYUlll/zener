@@ -1,5 +1,6 @@
 #include "utils/log/use_spd_log.h"
 #include "spdlog/sinks/basic_file_sink.h"
+#include "spdlog/sinks/rotating_file_sink.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/spdlog.h"
 
@@ -20,6 +21,7 @@ std::atomic<bool> Logger::_sInitialized{false};
 std::string Logger::_logFileName{};
 std::string Logger::_logDirectory{};
 std::string Logger::_filePrefix{"zener"};
+bool Logger::_usingRotation{false}; // 初始化轮转标志
 // 添加互斥锁保护日志操作
 static std::mutex sLoggerMutex;
 
@@ -212,6 +214,87 @@ void Logger::log(const spdlog::source_loc& loc,
             // 避免在日志记录中抛出异常导致程序崩溃
             std::cerr << "Error logging message: " << ex.what() << std::endl;
         }
+    }
+}
+
+bool Logger::WriteToFileWithRotation(const std::string_view logDir,
+                                     const std::string_view prefix,
+                                     size_t max_size, size_t max_files) {
+    // 使用互斥锁保护文件操作
+    std::lock_guard<std::mutex> lock(sLoggerMutex);
+
+    if (!_sInitialized.load(std::memory_order_acquire) || !sSpdLogger) {
+        return false;
+    }
+
+    try {
+        _logDirectory = logDir;
+        _filePrefix = prefix;
+        _usingRotation = true;
+
+        const std::filesystem::path dirPath(_logDirectory);
+        if (!exists(dirPath)) { // 创建日志目录(如果不存在)
+            if (!create_directories(dirPath)) {
+                std::cerr << "Failed to create log directory: " << _logDirectory
+                          << std::endl;
+                return false;
+            }
+        }
+
+        // 构建日志文件基础名称（不包含 .log 后缀，rotating sink 会自动添加）
+        std::string fileName = std::string(_filePrefix);
+        const std::filesystem::path fullPath = dirPath / (fileName + ".log");
+        _logFileName = fullPath.string();
+
+        // 缓存当前日志级别
+        const auto currentLevel = sSpdLogger->level();
+
+        // 创建新的sink
+        const auto console_sink =
+            std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        const auto rotating_file_sink =
+            std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+                _logFileName, max_size, max_files);
+
+        // 设置文件sink的格式
+        rotating_file_sink->set_pattern(LOG_PATTERN);
+        console_sink->set_pattern(LOG_PATTERN);
+
+        std::vector<spdlog::sink_ptr> sinks{console_sink, rotating_file_sink};
+        const auto new_logger = std::make_shared<spdlog::logger>(
+            "main", sinks.begin(), sinks.end());
+
+        new_logger->set_level(currentLevel);
+        new_logger->set_pattern(LOG_PATTERN);
+
+        // 安全地替换日志器
+        try {
+            if (spdlog::get("main")) {
+                spdlog::drop("main");
+            }
+            spdlog::register_logger(new_logger);
+            sSpdLogger = new_logger;
+
+            // 配置定期刷新
+            spdlog::flush_every(std::chrono::seconds(3));
+
+        } catch (const std::exception& ex) {
+            std::cerr << "Error replacing logger: " << ex.what() << std::endl;
+            // 如果替换失败，继续使用旧的日志器
+            return false;
+        }
+
+        sSpdLogger->info("Log rotation enabled: max_size={}MB, max_files={}",
+                         max_size / (1024 * 1024), max_files);
+        sSpdLogger->info("Log file created with rotation: {}", _logFileName);
+        return true;
+    } catch (const spdlog::spdlog_ex& ex) {
+        std::cerr << "Failed to create rotating log file: " << ex.what()
+                  << std::endl;
+        return false;
+    } catch (const std::exception& ex) {
+        std::cerr << "Failed with exception: " << ex.what() << std::endl;
+        return false;
     }
 }
 

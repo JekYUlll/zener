@@ -18,13 +18,16 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
-# 构建类型优化
+# 构建类型优化 - 强制设置为Release，除非明确指定其他类型
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE RelWithDebInfo)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+    message(STATUS "设置构建类型为Release (默认值)")
 endif()
 
+message(STATUS "当前构建类型: ${CMAKE_BUILD_TYPE}")
+
 # 链接时优化(LTO)选项 - 可显著提高Release版本性能
-option(ENABLE_LTO "Enable Link Time Optimization for Release builds" OFF)
+option(ENABLE_LTO "Enable Link Time Optimization for Release builds" ON)
 
 if(ENABLE_LTO AND(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
     include(CheckIPOSupported)
@@ -97,12 +100,33 @@ include_directories(${MYSQL_INCLUDE_DIRS})
 # 添加子目录 收集了 CORE_SOURCES
 add_subdirectory(src)
 
-# 主服务器可执行文件 - 修改为使用后缀
+# 主服务器可执行文件 - 同时创建基本版本和特定定时器版本
+add_executable(Zener cmd/server/main.cpp)
 add_executable(Zener${TIMER_SUFFIX} cmd/server/main.cpp)
+
+# 为基本版本链接库
+target_link_libraries(Zener PRIVATE
+    zener_core
+    PkgConfig::MYSQL
+)
+
+# 为特定定时器版本链接库
 target_link_libraries(Zener${TIMER_SUFFIX} PRIVATE
     zener_core
     PkgConfig::MYSQL
 )
+
+# 添加自定义命令，在Release模式下自动strip二进制文件
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_custom_command(TARGET Zener POST_BUILD
+        COMMAND ${CMAKE_STRIP} $<TARGET_FILE:Zener>
+        COMMENT "Stripping debug symbols from ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Zener"
+    )
+    add_custom_command(TARGET Zener${TIMER_SUFFIX} POST_BUILD
+        COMMAND ${CMAKE_STRIP} $<TARGET_FILE:Zener${TIMER_SUFFIX}>
+        COMMENT "Stripping debug symbols from ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Zener${TIMER_SUFFIX}"
+    )
+endif()
 
 # 测试框架集成
 enable_testing()
@@ -111,13 +135,21 @@ function(add_zener_test name)
     add_executable(${name} tests/${name}/main.cpp)
     target_link_libraries(${name} PRIVATE zener_core)
     add_test(NAME ${name} COMMAND ${name})
+
+    # 在Release模式下strip测试二进制文件
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_custom_command(TARGET ${name} POST_BUILD
+            COMMAND ${CMAKE_STRIP} $<TARGET_FILE:${name}>
+            COMMENT "Stripping debug symbols from ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${name}"
+        )
+    endif()
 endfunction()
 
 add_zener_test(log_test)
 add_zener_test(hardware_test)
 
-# 完善安装规则 - 也需要修改
-install(TARGETS Zener${TIMER_SUFFIX}
+# 完善安装规则 - 安装基本版本和特定定时器版本
+install(TARGETS Zener Zener${TIMER_SUFFIX}
     RUNTIME DESTINATION bin
     BUNDLE DESTINATION bin
 )

@@ -11,6 +11,27 @@ Zener是一个高性能的并发服务器，支持多种定时器实现，针对
 
 两种实现各有优劣，可以根据实际需求选择合适的版本。
 
+## 日志系统
+
+Zener使用高性能的SPDLog库实现日志功能，支持以下特性：
+
+1. **日志分级** - 支持TRACE、DEBUG、INFO、WARN、ERROR、CRITICAL等级别
+2. **日志轮转** - 自动管理日志文件大小和数量，防止磁盘占用过大
+3. **控制台和文件双向输出** - 日志同时输出到控制台和文件
+
+### 日志轮转
+
+当日志文件达到指定大小(默认50MB)时，系统会自动创建新的日志文件，并保留指定数量(默认10个)的历史文件。详细说明请参考[日志轮转文档](docs/log_rotation.md)。
+
+使用示例:
+```cpp
+// 使用默认配置(50MB文件大小，10个历史文件)
+zener::Logger::WriteToFileWithRotation("logs", "server");
+
+// 自定义配置
+zener::Logger::WriteToFileWithRotation("logs", "server", 100*1024*1024, 5);
+```
+
 ## 构建与运行
 
 ### 脚本概述
@@ -21,6 +42,7 @@ Zener是一个高性能的并发服务器，支持多种定时器实现，针对
 - `scripts/run_server.sh` - 运行指定版本的服务器
 - `scripts/benchmark.sh` - 对服务器进行性能测试
 - `scripts/kill.sh` - 停止正在运行的服务器
+- `scripts/test_log_rotation.sh` - 测试日志轮转功能
 
 ### 构建所有版本
 
@@ -70,7 +92,8 @@ Zener是一个高性能的并发服务器，支持多种定时器实现，针对
 
 1. 对比测试两种定时器实现，找出最适合您应用场景的版本
 2. 日志文件保存在 `logs/` 目录下，可以通过日志分析定位问题
-3. 在进行性能测试前，确保没有其他高负载程序正在运行
+3. 使用日志轮转功能防止日志文件过大导致的磁盘空间问题
+4. 在进行性能测试前，确保没有其他高负载程序正在运行
 
 ## 开发者指南
 
@@ -81,6 +104,10 @@ Zener是一个高性能的并发服务器，支持多种定时器实现，针对
 - `include/task/timer/maptimer.h` - MAP定时器头文件
 - `src/task/timer/heaptimer.cpp` - 堆定时器实现
 - `src/task/timer/maptimer.cpp` - MAP定时器实现
+
+日志系统相关文件：
+- `include/utils/log/use_spd_log.h` - 日志系统头文件
+- `src/utils/log/use_spd_log.cpp` - 日志系统实现
 
 在修改实现时，请特别注意线程安全、资源管理和异常处理。
 

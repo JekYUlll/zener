@@ -19,17 +19,20 @@ echo -e "${BLUE}此脚本将构建MAP和HEAP两种定时器实现的服务器版
 echo -e "项目根目录: ${PROJECT_ROOT}"
 echo ""
 
+# 确保bin目录存在
+mkdir -p bin
+
 # 构建MAP版本
 echo -e "${YELLOW}开始构建MAP定时器版本...${NC}"
 mkdir -p build_map
 cd build_map || exit 1
-cmake .. -DTIMER_IMPLEMENTATION=MAP
+cmake .. -DTIMER_IMPLEMENTATION=MAP -DCMAKE_BUILD_TYPE=Release
 make -j $(nproc)
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}MAP版本构建成功!${NC}"
-    # 复制可执行文件
-    cp Zener "../bin/Zener_map" 2>/dev/null || echo -e "${RED}无法复制MAP版本可执行文件${NC}"
+    # 复制可执行文件 - 更正命名
+    cp Zener-map "../bin/Zener_map" 2>/dev/null || echo -e "${RED}无法复制MAP版本可执行文件${NC}"
 else
     echo -e "${RED}MAP版本构建失败!${NC}"
 fi
@@ -41,22 +44,19 @@ cd "$PROJECT_ROOT" || exit 1
 echo -e "${YELLOW}开始构建HEAP定时器版本...${NC}"
 mkdir -p build_heap
 cd build_heap || exit 1
-cmake .. -DTIMER_IMPLEMENTATION=HEAP
+cmake .. -DTIMER_IMPLEMENTATION=HEAP -DCMAKE_BUILD_TYPE=Release
 make -j $(nproc)
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}HEAP版本构建成功!${NC}"
-    # 复制可执行文件
-    cp Zener "../bin/Zener_heap" 2>/dev/null || echo -e "${RED}无法复制HEAP版本可执行文件${NC}"
+    # 复制可执行文件 - 更正命名
+    cp Zener-heap "../bin/Zener_heap" 2>/dev/null || echo -e "${RED}无法复制HEAP版本可执行文件${NC}"
 else
     echo -e "${RED}HEAP版本构建失败!${NC}"
 fi
 
 # 返回项目根目录
 cd "$PROJECT_ROOT" || exit 1
-
-# 确保bin目录存在
-mkdir -p bin
 
 # 总结
 echo ""

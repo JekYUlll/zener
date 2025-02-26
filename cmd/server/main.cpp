@@ -1,11 +1,25 @@
 #include "core/server.h"
+#include "utils/log/use_spd_log.h"
 #include <csignal>
+#include <filesystem>
 #include <iostream>
 
 int main() {
     try {
         // 初始化日志系统
         zener::Logger::Init();
+
+        // 创建日志目录
+        std::filesystem::path logDir = "logs";
+        if (!std::filesystem::exists(logDir)) {
+            std::filesystem::create_directories(logDir);
+        }
+
+        // 配置日志轮转，最大文件大小50MB，保留10个历史文件
+        if (!zener::Logger::WriteToFileWithRotation("logs", "server")) {
+            std::cerr << "配置日志轮转失败，将只使用控制台输出!" << std::endl;
+        }
+
         std::cout << "启动Zener服务器..." << std::endl;
 
         // 从配置文件创建服务器

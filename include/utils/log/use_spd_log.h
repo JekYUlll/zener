@@ -10,6 +10,10 @@ namespace zener {
 // [%P-%t]
 #define LOG_PATTERN "%^%Y-%m-%d %H:%M:%S.%e [%1!L] [%20s:%-4#] - %v%$"
 
+// 默认日志轮转配置
+#define DEFAULT_MAX_FILE_SIZE (50 * 1024 * 1024) // 50MB
+#define DEFAULT_MAX_FILES 10                     // 保留10个历史文件
+
 class Logger {
   public:
     static Logger* GetLoggerInstance() { return &_instance; }
@@ -27,6 +31,12 @@ class Logger {
 
     // 兼容旧接口，但现在会自动根据日期生成文件名
     static bool WriteToFile(std::string_view logDir, std::string_view prefix);
+
+    // 使用日志轮转功能，当文件大小超过max_size字节时创建新文件
+    static bool WriteToFileWithRotation(std::string_view logDir,
+                                        std::string_view prefix,
+                                        size_t max_size = DEFAULT_MAX_FILE_SIZE,
+                                        size_t max_files = DEFAULT_MAX_FILES);
 
     // 旧接口保留，但内部会自动处理文件名
     static void SetLogFilePath(std::string_view fileName);
@@ -62,6 +72,7 @@ class Logger {
     static std::string _logDirectory; // 日志文件存储目录
     static std::string _filePrefix;   // 日志文件名前缀，默认为"zener"
     static std::atomic<bool> _sInitialized;
+    static bool _usingRotation; // 是否使用日志轮转
 };
 
 #define ZENER_LOG_LOGGER_CALL(adlog, level, ...)                               \
