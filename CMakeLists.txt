@@ -43,6 +43,7 @@ endif()
 
 add_definitions(-D__USE_SPDLOG) # __USE_SPDLOG 使用 spdlog 而不是自己的 log 实现
 add_definitions(-D__V0) # __V0 代表启用 webserver 11 原本实现
+add_definitions(-D__USE_NO_DELAY) # 创建连接的时候启用 NO_DELAY
 
 include_directories(
     ${PROJECT_SOURCE_DIR}/include

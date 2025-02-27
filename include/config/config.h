@@ -20,7 +20,6 @@ struct Config {};
 struct Config {
     std::string configPath;
 
-  public:
     Config(const Config&) = delete;
     Config& operator=(Config const&) = delete;
 

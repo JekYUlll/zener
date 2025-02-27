@@ -23,7 +23,7 @@ class Server {
     Server(int port, int trigMode, int timeoutMS, bool optLinger,
            const char* sqlHost, int sqlPort, const char* sqlUser,
            const char* sqlPwd, const char* dbName, int connPoolNum,
-           int threadNum, bool openLog, int logLevel = -1, int logQueSize = -1);
+           int threadNum, bool openLog = false, int logLevel = -1, int logQueSize = -1);
 
     ~Server();
 
@@ -34,37 +34,40 @@ class Server {
     [[nodiscard]] bool IsClosed() const { return _isClose; }
 
   private:
-    // 包含连接ID的连接信息结构体
+    /*
+        包含连接ID的连接信息结构体
+        为了扩展性
+    */
     struct ConnInfo {
         http::Conn conn; // 连接对象
-        uint64_t connId; // 唯一连接ID
+        uint64_t connId; // 唯一连接ID 用于替代fd
     };
 
     bool initSocket();
     void initEventMode(int trigMode);
-    void addClient(int fd, const sockaddr_in& addr) const;
+    void addClient(int fd, const sockaddr_in& addr);
 
-    void dealListen() const;
-    void dealRead(http::Conn* client) const;
-    void dealWrite(http::Conn* client) const;
+    void dealListen();
+    void dealRead(http::Conn* client);
+    void dealWrite(const http::Conn* client);
 
     static void sendError(int fd, const char* info);
-    void extentTime(const http::Conn* client) const;
-    void closeConn(http::Conn* client) const;
+    void extentTime(const http::Conn* client);
+    void closeConn(http::Conn* client);
 
-    void onRead(http::Conn* client) const;
-    void onWrite(http::Conn* client) const;
-    void onProcess(http::Conn* client) const;
+    void onRead(http::Conn* client);
+    void onWrite(http::Conn* client);
+    void onProcess(http::Conn* client);
 
-    // 降低默认最大连接数，防止文件描述符耗尽
-    static constexpr int MAX_FD = 10000;
+    static constexpr int MAX_FD = 65536;
+    static constexpr int MAX_EVENTS = 1024; // TODO unused
 
     static int setFdNonblock(int fd);
 
-    int _port;
+    int _port;      // 服务器监听的端口
     bool _openLinger;
-    int _timeoutMS;
-    bool _isClose;
+    int _timeoutMS; // @
+    std::atomic<bool> _isClose; // @改为原子 reactor主线程为单线程，但可能会使用safeguard
     int _listenFd{};
     std::string _cwd{};       // 工作目录
     std::string _staticDir{}; // 静态资源目录
@@ -72,14 +75,20 @@ class Server {
     uint32_t _listenEvent{};
     uint32_t _connEvent{};
 
+    // webserver 11 此处存储 unique_ptr<HeapTimer>, 但我计时器是单例
     std::unique_ptr<ThreadPool> _threadpool;
     std::unique_ptr<Epoller> _epoller;
-    // 旧版本: mutable std::unordered_map<int, http::Conn> _users;
-    // 新版本: 使用ConnInfo结构体存储连接信息
-    mutable std::unordered_map<int, ConnInfo> _users;
-
-    // 用于生成唯一连接ID的原子计数器
-    mutable std::atomic<uint64_t> _nextConnId{0};
+    /*
+        旧版本: mutable std::unordered_map<int, http::Conn> _users;
+        新版本: 使用ConnInfo结构体存储连接信息
+        文件描述符 (fd) 在连接关闭后可能被新连接重用，导致日志、监控或调试时无法区分不同连接
+    */
+    std::unordered_map<int, ConnInfo> _users;
+    /*
+        用于生成唯一连接ID的原子计数器 --是否没必要？reactor里server是单线程的
+        若其他线程（如工作线程池）可能创建连接，需保留原子操作
+    */
+    std::atomic<uint64_t> _nextConnId{0};
 };
 
 } // namespace v0

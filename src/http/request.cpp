@@ -18,16 +18,16 @@ const std::unordered_map<std::string, int> Request::DEFAULT_HTML_TAG{
 };
 
 void Request::Init() {
-    method_ = path_ = version_ = body_ = "";
-    state_ = REQUEST_LINE;
-    header_.clear();
-    post_.clear();
+    _method = _path = _version = _body = "";
+    _state = REQUEST_LINE;
+    _header.clear();
+    _post.clear();
 }
 
 bool Request::IsKeepAlive() const {
-    if (header_.count("Connection") == 1) {
-        return header_.find("Connection")->second == "keep-alive" &&
-               version_ == "1.1";
+    if (_header.count("Connection") == 1) {
+        return _header.find("Connection")->second == "keep-alive" &&
+               _version == "1.1";
     }
     return false;
 }
@@ -37,26 +37,26 @@ bool Request::parse(Buffer& buff) {
     if (buff.ReadableBytes() <= 0) {
         return false;
     }
-    while (buff.ReadableBytes() && state_ != FINISH) {
+    while (buff.ReadableBytes() && _state != FINISH) {
         const char* lineEnd =
             std::search(buff.Peek(), buff.BeginWrite(), CRLF, CRLF + 2);
         const char* peek = buff.Peek();
         std::string line(peek, lineEnd);
-        switch (state_) {
+        switch (_state) {
         case REQUEST_LINE:
-            if (!ParseRequestLine_(line)) {
+            if (!parseRequestLine(line)) {
                 return false;
             }
-            ParsePath_();
+            parsePath();
             break;
         case HEADERS:
-            ParseHeader_(line);
+            parseHeader(line);
             if (buff.ReadableBytes() <= 2) {
-                state_ = FINISH;
+                _state = FINISH;
             }
             break;
         case BODY:
-            ParseBody_(line);
+            parseBody(line);
             break;
         default:
             break;
@@ -70,51 +70,50 @@ bool Request::parse(Buffer& buff) {
     return true;
 }
 
-void Request::ParsePath_() {
-    if (path_ == "/") {
-        path_ = "/index.html";
+void Request::parsePath() {
+    if (_path == "/") {
+        _path = "/index.html";
     } else {
         for (auto& item : DEFAULT_HTML) {
-            if (item == path_) {
-                path_ += ".html";
+            if (item == _path) {
+                _path += ".html";
                 break;
             }
         }
     }
 }
 
-bool Request::ParseRequestLine_(const std::string& line) {
+bool Request::parseRequestLine(const std::string& line) {
     // 正则
     const std::regex patten("^([^ ]*) ([^ ]*) HTTP/([^ ]*)$");
     if (std::smatch subMatch; regex_match(line, subMatch, patten)) {
-        method_ = subMatch[1];
-        path_ = subMatch[2];
-        version_ = subMatch[3];
-        state_ = HEADERS;
+        _method = subMatch[1];
+        _path = subMatch[2];
+        _version = subMatch[3];
+        _state = HEADERS;
         return true;
     }
     LOG_E("RequestLine Error! line: {}", line);
     return false;
 }
 
-void Request::ParseHeader_(const std::string& line) {
-    std::regex patten("^([^:]*): ?(.*)$");
-    std::smatch subMatch;
-    if (regex_match(line, subMatch, patten)) {
-        header_[subMatch[1]] = subMatch[2];
+void Request::parseHeader(const std::string& line) {
+    const std::regex patten("^([^:]*): ?(.*)$");
+    if (std::smatch subMatch; regex_match(line, subMatch, patten)) {
+        _header[subMatch[1]] = subMatch[2];
     } else {
-        state_ = BODY;
+        _state = BODY;
     }
 }
 
-void Request::ParseBody_(const std::string& line) {
-    body_ = line;
-    ParsePost_();
-    state_ = FINISH;
+void Request::parseBody(const std::string& line) {
+    _body = line;
+    parsePost();
+    _state = FINISH;
     LOG_D("Body:{0}, len:{1}", line.c_str(), line.size());
 }
 
-int Request::ConverHex(char ch) {
+int Request::convertHex(const char ch) {
     if (ch >= 'A' && ch <= 'F')
         return ch - 'A' + 10;
     if (ch >= 'a' && ch <= 'f')
@@ -122,55 +121,55 @@ int Request::ConverHex(char ch) {
     return ch;
 }
 
-void Request::ParsePost_() {
-    if (method_ == "POST" &&
-        header_["Content-Type"] == "application/x-www-form-urlencoded") {
-        ParseFromUrlencoded_();
-        if (DEFAULT_HTML_TAG.count(path_)) {
-            int tag = DEFAULT_HTML_TAG.find(path_)->second;
+void Request::parsePost() {
+    if (_method == "POST" &&
+        _header["Content-Type"] == "application/x-www-form-urlencoded") {
+        parseFromUrlencoded();
+        if (DEFAULT_HTML_TAG.count(_path)) {
+            int tag = DEFAULT_HTML_TAG.find(_path)->second;
             LOG_D("Tag:{}", tag);
             if (tag == 0 || tag == 1) {
                 bool isLogin = (tag == 1);
-                if (UserVerify(post_["username"], post_["password"], isLogin)) {
-                    path_ = "/welcome.html";
+                if (userVerify(_post["username"], _post["password"], isLogin)) {
+                    _path = "/welcome.html";
                 } else {
-                    path_ = "/error.html";
+                    _path = "/error.html";
                 }
             }
         }
     }
 }
 
-void Request::ParseFromUrlencoded_() {
-    if (body_.empty()) {
+void Request::parseFromUrlencoded() {
+    if (_body.empty()) {
         return;
     }
 
     std::string key, value;
     int num = 0;
-    int n = body_.size();
+    int n = _body.size();
     int i = 0, j = 0;
 
     for (; i < n; i++) {
-        char ch = body_[i];
+        char ch = _body[i];
         switch (ch) {
         case '=':
-            key = body_.substr(j, i - j);
+            key = _body.substr(j, i - j);
             j = i + 1;
             break;
         case '+':
-            body_[i] = ' ';
+            _body[i] = ' ';
             break;
         case '%':
-            num = ConverHex(body_[i + 1]) * 16 + ConverHex(body_[i + 2]);
-            body_[i + 2] = num % 10 + '0';
-            body_[i + 1] = num / 10 + '0';
+            num = convertHex(_body[i + 1]) * 16 + convertHex(_body[i + 2]);
+            _body[i + 2] = num % 10 + '0';
+            _body[i + 1] = num / 10 + '0';
             i += 2;
             break;
         case '&':
-            value = body_.substr(j, i - j);
+            value = _body.substr(j, i - j);
             j = i + 1;
-            post_[key] = value;
+            _post[key] = value;
             LOG_D("{0} = {1}", key.c_str(), value.c_str());
             break;
         default:
@@ -178,13 +177,13 @@ void Request::ParseFromUrlencoded_() {
         }
     }
     assert(j <= i);
-    if (post_.count(key) == 0 && j < i) {
-        value = body_.substr(j, i - j);
-        post_[key] = value;
+    if (_post.count(key) == 0 && j < i) {
+        value = _body.substr(j, i - j);
+        _post[key] = value;
     }
 }
 
-bool Request::UserVerify(const std::string& name, const std::string& pwd,
+bool Request::userVerify(const std::string& name, const std::string& pwd,
                          bool isLogin) {
     if (name == "" || pwd == "") {
         return false;

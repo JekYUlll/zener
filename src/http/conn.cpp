@@ -33,7 +33,7 @@ void Conn::init(int fd, const sockaddr_in& addr) {
     _readBuff.RetrieveAll();
     _isClose = false;
     LOG_I("Client {0} [{1}:{2}] in, userCount: {3}", _fd, GetIP(), GetPort(),
-          (int)userCount);
+          static_cast<int>(userCount));
 }
 
 void Conn::Close() {
@@ -41,17 +41,16 @@ void Conn::Close() {
     if (!_isClose) {
         _isClose = true;
         --userCount;
-        // 确保只关闭有效的文件描述符
-        if (_fd > 0) {
+        if (_fd > 0) { // 确保只关闭有效的文件描述符
             close(_fd);
             LOG_I("Client {0} [{1}:{2}] (connId={3}) quit, userCount: {4}", _fd,
-                  GetIP(), GetPort(), _connId, (int)userCount);
+                  GetIP(), GetPort(), _connId, static_cast<int>(userCount));
         } else {
-            LOG_W("Client with invalid fd={} (connId={}) quit, userCount: {}",
-                  _fd, _connId, (int)userCount);
+            LOG_W("Client with invalid fd={} (connId={}) quit, userCount: {}!",
+                  _fd, _connId, static_cast<int>(userCount));
         }
-        // 关闭后将fd设为-1，防止重复关闭
-        _fd = -1;
+        // @频繁接收到 -1 的文件描述符，是否是这里的问题？ TODO
+        _fd = -1; // 关闭后将fd设为-1，防止重复关闭
     }
 }
 

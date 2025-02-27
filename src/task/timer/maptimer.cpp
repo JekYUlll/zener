@@ -237,7 +237,6 @@ void TimerManager::DoSchedule(int milliseconds, int repeat,
 }
 
 int TimerManager::GetNextTick() {
-    // 使用读锁保护读取操作
     std::shared_lock<std::shared_mutex> lock(_timerMutex);
 
     if (_timers.empty()) {
@@ -256,7 +255,7 @@ int TimerManager::GetNextTick() {
 }
 
 void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
-                                     std::function<void()> cb) {
+                                     const std::function<void()>& cb) {
     // 检查参数有效性
     if (!cb) {
         LOG_W("定时器：尝试使用key={}调度空回调函数", key);
@@ -405,8 +404,7 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
         // 清理任何部分创建的资源
         try {
             std::unique_lock<std::shared_mutex> cleanupLock(_timerMutex);
-            auto keyIt = _keyToTimerId.find(key);
-            if (keyIt != _keyToTimerId.end()) {
+            if (const auto keyIt = _keyToTimerId.find(key); keyIt != _keyToTimerId.end()) {
                 _repeats.erase(keyIt->second);
                 _keyToTimerId.erase(keyIt);
             }
@@ -416,7 +414,7 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
     }
 }
 
-void TimerManager::CancelByKey(int key) {
+void TimerManager::CancelByKey(const int key) {
     std::unique_lock<std::shared_mutex> lock(_timerMutex);
     CancelByKeyInternal(key);
 }
@@ -425,17 +423,15 @@ void TimerManager::CancelByKeyInternal(int key) {
     try {
         LOG_D("定时器：尝试取消key={}的定时器", key);
 
-        auto keyIt = _keyToTimerId.find(key);
-        if (keyIt != _keyToTimerId.end()) {
-            int timerId = keyIt->second;
+        if (const auto keyIt = _keyToTimerId.find(key); keyIt != _keyToTimerId.end()) {
+            const int timerId = keyIt->second;
             LOG_D("定时器：找到key={}关联的定时器id={}", key, timerId);
 
             // 从映射中删除关联
             _keyToTimerId.erase(keyIt);
 
             // 清理重复信息
-            auto repeatIt = _repeats.find(timerId);
-            if (repeatIt != _repeats.end()) {
+            if (const auto repeatIt = _repeats.find(timerId); repeatIt != _repeats.end()) {
                 _repeats.erase(repeatIt);
                 LOG_D("定时器：已清理id={}的重复信息", timerId);
             }

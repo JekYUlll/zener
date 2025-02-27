@@ -95,7 +95,7 @@ class TimerManager final : public ITimerManager {
 
     // 使用业务ID的调度实现
     void DoScheduleWithKey(int key, int milliseconds, int repeat,
-                           std::function<void()> cb);
+                           const std::function<void()>& cb);
 
     // 内部方法：在持有锁的情况下取消定时器
     void CancelByKeyInternal(int key);

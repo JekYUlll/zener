@@ -59,8 +59,8 @@ class Request : std::enable_shared_from_this<Request> {
     void Init();
     bool parse(Buffer& buff);
 
-    _ZENER_SHORT_FUNC const std::string path() const { return path_; }
-    _ZENER_SHORT_FUNC std::string& path() { return path_; }
+    _ZENER_SHORT_FUNC const std::string path() const { return _path; }
+    _ZENER_SHORT_FUNC std::string& path() { return _path; }
 
     std::string method() const;
     std::string version() const;
@@ -76,25 +76,25 @@ class Request : std::enable_shared_from_this<Request> {
     */
 
   private:
-    bool ParseRequestLine_(const std::string& line);
-    void ParseHeader_(const std::string& line);
-    void ParseBody_(const std::string& line);
+    bool parseRequestLine(const std::string& line);
+    void parseHeader(const std::string& line);
+    void parseBody(const std::string& line);
 
-    void ParsePath_();
-    void ParsePost_();
-    void ParseFromUrlencoded_();
+    void parsePath();
+    void parsePost();
+    void parseFromUrlencoded();
 
-    static bool UserVerify(const std::string& name, const std::string& pwd,
+    static bool userVerify(const std::string& name, const std::string& pwd,
                            bool isLogin);
 
-    PARSE_STATE state_;
-    std::string method_, path_, version_, body_;
-    std::unordered_map<std::string, std::string> header_;
-    std::unordered_map<std::string, std::string> post_;
+    PARSE_STATE _state;
+    std::string _method, _path, _version, _body;
+    std::unordered_map<std::string, std::string> _header;
+    std::unordered_map<std::string, std::string> _post;
 
     static const std::unordered_set<std::string> DEFAULT_HTML;
     static const std::unordered_map<std::string, int> DEFAULT_HTML_TAG;
-    static int ConverHex(char ch);
+    static int convertHex(char ch);
 };
 
 // class Request {
