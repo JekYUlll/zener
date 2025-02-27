@@ -23,7 +23,38 @@ Conn::Conn()
 
 Conn::~Conn() { Close(); }
 
-void Conn::init(int fd, const sockaddr_in& addr) {
+Conn::Conn(Conn&& other) noexcept
+    : _fd(other._fd), _addr(other._addr), _connId(other._connId),
+    _readBuff(std::move(other._readBuff)), _writeBuff(std::move(other._writeBuff)),
+    _request(std::move(other._request)), _response(std::move(other._response)) {
+    other._fd = -1; // 使原对象失效
+    other._connId = -1;
+    other._addr = {0};
+}
+
+Conn& Conn::operator=(Conn&& other) noexcept {
+    if (this != &other) {
+        // 释放当前资源
+        if (_fd != -1) close(_fd);
+        _readBuff.RetrieveAll();
+        _writeBuff.RetrieveAll();
+        // 转移资源
+        _fd = other._fd;
+        _addr = other._addr;
+        _connId = other._connId;
+        _readBuff = std::move(other._readBuff);
+        _writeBuff = std::move(other._writeBuff);
+        _request = std::move(other._request);
+        _response = std::move(other._response);
+        // 置空原对象
+        other._fd = -1;
+        other._connId = -1;
+        other._addr = {0};
+    }
+    return *this;
+}
+
+void Conn::Init(int fd, const sockaddr_in& addr) {
     assert(fd > 0);
     ++userCount;
     _addr = addr;
@@ -54,12 +85,11 @@ void Conn::Close() {
     }
 }
 
-ssize_t Conn::read(int* saveErrno) {
+ssize_t Conn::Read(int* saveErrno) {
     ssize_t len = -1;
     ssize_t totalLen = 0;
-    int maxIterations = 8; // 限制最大读取次数，防止一直读取导致其他连接饥饿
+    constexpr int maxIterations = 8; // 限制最大读取次数，防止一直读取导致其他连接饥饿 TODO
     int iterations = 0;
-
     do {
         len = _readBuff.ReadFd(_fd, saveErrno);
         if (len > 0) {
@@ -88,7 +118,7 @@ ssize_t Conn::read(int* saveErrno) {
     return totalLen > 0 ? totalLen : len;
 }
 
-ssize_t Conn::write(int* saveErrno) {
+ssize_t Conn::Write(int* saveErrno) {
     LOG_D("Writing connection fd={}, connId={}: starting to send data, "
           "remaining bytes to write={}",
           _fd, _connId, _iov[0].iov_len + _iov[1].iov_len);
@@ -172,11 +202,9 @@ ssize_t Conn::write(int* saveErrno) {
         if (_iov[0].iov_len + _iov[1].iov_len == 0) {
             break;
         }
-
         // 在非ET模式下，或者当写入超过一定大小时，暂停写入，等待下次EPOLLOUT事件
         // 这样可以防止长时间占用CPU
-        constexpr size_t MAX_WRITE_PER_CALL = 4 * 1024 * 1024; // 4MB
-        if (!isET || totalWritten > MAX_WRITE_PER_CALL) {
+        if (constexpr size_t MAX_WRITE_PER_CALL = 4 * 1024 * 1024; !isET || totalWritten > MAX_WRITE_PER_CALL) {
             LOG_D("Writing connection fd={}, connId={}: "
                   "one go write reached limit or non-ET mode, waiting for next "
                   "write event",
@@ -191,7 +219,7 @@ ssize_t Conn::write(int* saveErrno) {
     return totalWritten;
 }
 
-bool Conn::process() {
+bool Conn::Process() {
     // 1. 如果读缓冲区为空，直接返回false，不进行后续处理
     if (_readBuff.ReadableBytes() <= 0) {
         // 降级为调试信息，这是正常情况，不需要作为警告输出

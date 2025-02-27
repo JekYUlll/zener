@@ -1,15 +1,22 @@
 #ifndef ZENER_SERVER_H
 #define ZENER_SERVER_H
 
+/*
+    添加 /health 端点响应 200 OK，供负载均衡器检测
+    示例：
+    cpp
+    server.AddRoute("/health", [](const Request& req, Response& res) {
+        res.SetStatus(200).SetBody("OK");
+    });
+*/
+
 #include "core/epoller.h"
 #include "http/conn.h"
 #include "task/threadpool_1.h"
 
 #include <atomic>
-#include <chrono>
 #include <csignal>
 #include <cstdint>
-#include <future>
 #include <memory>
 #include <netinet/in.h>
 #include <thread>
@@ -23,7 +30,8 @@ class Server {
     Server(int port, int trigMode, int timeoutMS, bool optLinger,
            const char* sqlHost, int sqlPort, const char* sqlUser,
            const char* sqlPwd, const char* dbName, int connPoolNum,
-           int threadNum, bool openLog = false, int logLevel = -1, int logQueSize = -1);
+           int threadNum, bool openLog = false, int logLevel = -1,
+           int logQueSize = -1);
 
     ~Server();
 
@@ -39,8 +47,33 @@ class Server {
         为了扩展性
     */
     struct ConnInfo {
-        http::Conn conn; // 连接对象
-        uint64_t connId; // 唯一连接ID 用于替代fd
+        http::Conn conn;   // 连接对象
+        uint64_t connId{}; // 唯一连接ID 用于替代fd
+
+        ConnInfo() = default;
+        ~ConnInfo() = default;
+        ConnInfo(const ConnInfo&) = delete;
+        ConnInfo& operator=(const ConnInfo&) = delete;
+
+
+
+        ConnInfo(ConnInfo&& other) noexcept
+            : conn(std::move(other.conn)), connId(other.connId) {
+            other.connId = -1;
+            other.conn = http::Conn{};
+        }
+
+        ConnInfo& operator=(ConnInfo&& other) noexcept {
+            if (this != &other) {
+                conn = std::move(other.conn);
+                connId = other.connId;
+                other.connId = -1;
+                other.conn = http::Conn{};
+            }
+            other.conn = {};
+            other.connId = -1;
+            return *this;
+        }
     };
 
     bool initSocket();
@@ -48,7 +81,7 @@ class Server {
     void addClient(int fd, const sockaddr_in& addr);
 
     void dealListen();
-    void dealRead(http::Conn* client);
+    void dealRead(const http::Conn* client);
     void dealWrite(const http::Conn* client);
 
     static void sendError(int fd, const char* info);
@@ -64,10 +97,17 @@ class Server {
 
     static int setFdNonblock(int fd);
 
-    int _port;      // 服务器监听的端口
+    void _closeConnInternal(int fd, const http::Conn& conn) const;
+    void _closeConnInternal(int fd, http::Conn&& conn) const;
+    // 异步关闭连接（非阻塞）
+    void closeConnAsync(int fd,
+                        const std::function<void()>& callback = nullptr);
+
+    int _port; // 服务器监听的端口
     bool _openLinger;
     int _timeoutMS; // @
-    std::atomic<bool> _isClose; // @改为原子 reactor主线程为单线程，但可能会使用safeguard
+    std::atomic<bool>
+        _isClose; // @改为原子 reactor主线程为单线程，但可能会使用safeguard
     int _listenFd{};
     std::string _cwd{};       // 工作目录
     std::string _staticDir{}; // 静态资源目录
@@ -81,7 +121,8 @@ class Server {
     /*
         旧版本: mutable std::unordered_map<int, http::Conn> _users;
         新版本: 使用ConnInfo结构体存储连接信息
-        文件描述符 (fd) 在连接关闭后可能被新连接重用，导致日志、监控或调试时无法区分不同连接
+        文件描述符 (fd)
+       在连接关闭后可能被新连接重用，导致日志、监控或调试时无法区分不同连接
     */
     std::unordered_map<int, ConnInfo> _users;
     /*
@@ -89,6 +130,12 @@ class Server {
         若其他线程（如工作线程池）可能创建连接，需保留原子操作
     */
     std::atomic<uint64_t> _nextConnId{0};
+
+    /*
+        通过 eventfd 创建，用于唤醒。防止退出的时候阻塞在 epoll_wait
+     */
+    int _wakeupFd;
+    std::mutex _connMutex;
 };
 
 } // namespace v0
@@ -97,135 +144,30 @@ std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath);
 
 class ServerGuard {
   public:
-    explicit ServerGuard(v0::Server* srv)
-        : _srv(srv), _setupSignalHandlers(false), _shouldExit(false) {
-        _thread = std::thread([this] { _srv->Start(); });
-    }
+    explicit ServerGuard(v0::Server* srv, bool useSignals = false);
 
-    // 带有信号处理的构造函数
-    ServerGuard(v0::Server* srv, bool setupSignalHandlers)
-        : _srv(srv), _setupSignalHandlers(setupSignalHandlers),
-          _shouldExit(false) {
-        if (_setupSignalHandlers) {
-            // 设置静态指针以便信号处理函数访问
-            _instance = this;
-            // 使用更稳定的sigaction替代signal
-            struct sigaction sa{};
-            sa.sa_handler = SignalHandler;
-            sigemptyset(&sa.sa_mask);
-            sa.sa_flags = 0;
-            sigaction(SIGINT, &sa, nullptr);
-            sigaction(SIGTERM, &sa, nullptr);
-        }
-        _thread = std::thread([this] { _srv->Start(); });
-    }
+    ~ServerGuard();
 
-    ~ServerGuard() {
-        Shutdown();
-        if (_thread.joinable()) {
-            _thread.join();
-        }
-        // 清除静态指针
-        if (_setupSignalHandlers && _instance == this) {
-            _instance = nullptr;
-        }
-        Logger::Shutdown();
-    }
+    void Shutdown();
 
-    // 等待服务器线程结束，允许超时和中断
-    void Wait() {
-        const int CHECK_INTERVAL_MS = 100; // 检查服务器状态的间隔
-
-        // 等待信号或其他退出条件
-        while (!_shouldExit) {
-            // 检查服务器线程是否已经结束
-            if (!_thread.joinable() || (_srv && _srv->IsClosed())) {
-                LOG_I("Server thread has exited or server is closed");
-                break;
-            }
-
-            // 定期唤醒以检查_shouldExit标志
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(CHECK_INTERVAL_MS));
-        }
-
-        // 如果收到退出信号，确保关闭服务器
-        if (_shouldExit && _srv && !_srv->IsClosed()) {
-            LOG_I("Exit signal received, shutting down server...");
-            _srv->Shutdown();
-        }
-
-        // 给服务器一些时间来完成关闭
-        if (_thread.joinable()) {
-            LOG_I("等待服务器主线程结束...");
-
-            // 尝试在有限时间内等待线程结束
-            try {
-                // 最多等待3秒
-                auto joinTimeout = std::chrono::seconds(3);
-                auto joinStart = std::chrono::high_resolution_clock::now();
-
-                while (_thread.joinable()) {
-                    // 尝试非阻塞地检查线程是否结束
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-                    // 检查是否超时
-                    auto joinNow = std::chrono::high_resolution_clock::now();
-                    if (std::chrono::duration_cast<std::chrono::seconds>(
-                            joinNow - joinStart) > joinTimeout) {
-                        LOG_W("Thread did not finish within time limit, giving "
-                              "up");
-                        break;
-                    }
-
-                    // 如果服务器已关闭但线程仍在运行，可能卡在某处
-                    if (_srv && _srv->IsClosed()) {
-                        LOG_I("Server marked as closed, but thread still "
-                              "running");
-                    }
-                }
-
-                // 最后尝试join，如果仍然可以join
-                if (_thread.joinable()) {
-                    LOG_I("Executing final join operation");
-                    // 设置一个短的超时时间
-                    _thread.join();
-                }
-            } catch (const std::exception& e) {
-                LOG_E("Error waiting for server thread: {}", e.what());
-            }
-        }
-    }
-
-    // 手动触发服务器关闭
-    void Shutdown() {
-        _shouldExit = true;
-        if (_srv && !_srv->IsClosed()) {
-            _srv->Shutdown();
-        }
+    _ZENER_SHORT_FUNC bool ShouldExit() const {
+        return _shouldExit.load(std::memory_order_relaxed);
     }
 
   private:
-    // 信号处理函数
-    static void SignalHandler(int sig) {
-        if (_instance) {
-            LOG_I("Signal received: {}, shutting server...", sig);
-            // 只设置标志，避免在信号处理函数中调用复杂函数
-            _instance->_shouldExit = true;
-        }
-    }
+    static void SetupSignalHandlers();
+
+    static void SignalHandler(int sig);
 
     v0::Server* _srv;
     std::thread _thread;
-    bool _setupSignalHandlers;
-    std::atomic<bool> _shouldExit; // 线程安全的退出标志
+    bool _useSignals;
+    std::atomic<bool> _shouldExit{false};
+    std::mutex _mutex;
+    std::condition_variable _cv;
 
-    // 静态成员用于信号处理
-    static ServerGuard* _instance;
+    inline static ServerGuard* _instance = nullptr;
 };
-
-// 在类外部定义静态成员
-inline ServerGuard* ServerGuard::_instance = nullptr;
 
 } // namespace zener
 

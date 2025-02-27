@@ -23,4 +23,4 @@ password = "root"
 db = 0
 
 [thread]
-poolSize = 6 # 线程池的并行数
+poolSize = 8 # 线程池的并行数

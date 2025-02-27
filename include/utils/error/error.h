@@ -12,14 +12,6 @@ enum class GeneralErrorCode {
 
 const char* GeneralErrorCodeToString(GeneralErrorCode code); // 将普通函数错误码转换为字符串
 
-    class SocketException : public std::runtime_error {
-        public:
-        explicit SocketException(const std::string& what) : std::runtime_error(what) {}
-        const char* error() {
-            return what();
-        }
-    }
-
 } // namespace zener::error
 
 #endif // !ZENER_UTILS_ERROR_H

@@ -33,7 +33,7 @@ namespace http {
 //     PATCH,
 // };
 
-class Request : std::enable_shared_from_this<Request> {
+class Request {
   public:
     enum PARSE_STATE {
         REQUEST_LINE,
@@ -55,11 +55,13 @@ class Request : std::enable_shared_from_this<Request> {
 
     Request() { Init(); }
     ~Request() = default;
+    Request(Request&&) = default;
+    Request& operator=(Request&&) = default;
 
     void Init();
     bool parse(Buffer& buff);
 
-    _ZENER_SHORT_FUNC const std::string path() const { return _path; }
+    _ZENER_SHORT_FUNC std::string path() const { return _path; }
     _ZENER_SHORT_FUNC std::string& path() { return _path; }
 
     std::string method() const;

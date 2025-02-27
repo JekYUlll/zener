@@ -14,9 +14,7 @@
 
 #include <arpa/inet.h> // sockaddr_in
 #include <cstdint>     // uint64_t
-#include <cstdlib>     // atoi()
 #include <sys/types.h>
-#include <sys/uio.h> // readv/writev
 
 namespace zener::http {
 
@@ -28,22 +26,27 @@ class Conn {
   public:
     Conn();
     ~Conn();
+    Conn(const Conn&) = delete;
+    Conn& operator=(const Conn&) = delete;
 
-    void init(int sockFd, const sockaddr_in& addr);
+    Conn(Conn&& other) noexcept;
+    Conn& operator=(Conn&& other) noexcept;
+
+    void Init(int sockFd, const sockaddr_in& addr);
 
     // 设置连接ID
-    void SetConnId(uint64_t id) { _connId = id; }
+    void SetConnId(const uint64_t id) { _connId = id; }
 
     // 获取连接ID
-    uint64_t GetConnId() const { return _connId; }
+    _ZENER_SHORT_FUNC uint64_t GetConnId() const { return _connId; }
 
     void Close();
 
-    ssize_t read(int* saveErrno);
+    [[nodiscard]] ssize_t Read(int* saveErrno);
 
-    ssize_t write(int* saveErrno);
+    [[nodiscard]] ssize_t Write(int* saveErrno);
 
-    bool process();
+    [[nodiscard]] bool Process();
 
     // 需要写出的字节数
     _ZENER_SHORT_FUNC int ToWriteBytes() const {
@@ -66,16 +69,16 @@ class Conn {
 
     static bool isET;             // 是否为边缘触发
     static const char* staticDir; // 请求文件对应的根目录
-    static std::atomic<int> userCount;
+    static std::atomic<int> userCount; // TODO 感觉这玩意应该放在 Server 里，就不需要用原子了
 
   private:
     int _fd;
-    struct sockaddr_in _addr;
+    struct sockaddr_in _addr{};
     uint64_t _connId; // 连接唯一标识符
-    bool _isClose;
+    bool _isClose{};
 
-    int _iovCnt;
-    struct iovec _iov[2];
+    int _iovCnt{};
+    struct iovec _iov[2]{};
 
     Buffer _readBuff;  // 读缓冲区
     Buffer _writeBuff; // 写缓冲区

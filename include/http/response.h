@@ -13,6 +13,8 @@ class Response {
   public:
     Response();
     ~Response();
+    Response(Response&&) = default;
+    Response& operator=(Response&&) = default;
 
     void Init(const std::string& srcDir, const std::string& path,
               bool isKeepAlive, int code);

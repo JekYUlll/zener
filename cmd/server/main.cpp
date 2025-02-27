@@ -4,46 +4,42 @@
 #include <filesystem>
 #include <iostream>
 
+std::atomic<bool> g_ShutdownFlag{false};
+
+void HandleConsoleInput() {
+        std::string cmd;
+        while (!g_ShutdownFlag) {
+                std::cout << "Enter 'exit' to shutdown server: ";
+                std::getline(std::cin, cmd);
+                if (cmd == "exit") {
+                        g_ShutdownFlag = true;
+                        break;
+                }
+        }
+}
+
 int main() {
-    try {
-        // 初始化日志系统
-        zener::Logger::Init();
+        try {
+                zener::Logger::Init();
 
-        // 创建日志目录
-        std::filesystem::path logDir = "logs";
-        if (!std::filesystem::exists(logDir)) {
-            std::filesystem::create_directories(logDir);
+                const auto server = zener::NewServerFromConfig("config.toml");
+
+                zener::ServerGuard guard(server.get(), true);
+                // -------------------- 控制台输入监听线程 --------------------
+                std::thread consoleThread(HandleConsoleInput);
+                consoleThread.detach();
+                // -------------------- 主线程阻塞等待退出条件 --------------------
+                while (!g_ShutdownFlag && !guard.ShouldExit()) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+
+                // -------------------- 触发优雅关闭 --------------------
+                guard.Shutdown();
+
+                return 0;
+        } catch (const std::exception& e) {
+                std::cerr << "Fatal error: " << e.what() << std::endl;
+                return EXIT_FAILURE;
         }
-
-        // 配置日志轮转，最大文件大小50MB，保留10个历史文件
-        if (!zener::Logger::WriteToFileWithRotation("logs", "server")) {
-            std::cerr << "配置日志轮转失败，将只使用控制台输出!" << std::endl;
-        }
-
-        std::cout << "启动Zener服务器..." << std::endl;
-
-        // 从配置文件创建服务器
-        const auto server = zener::NewServerFromConfig("config.toml");
-        if (!server) {
-            std::cerr << "创建服务器失败，请检查配置文件!" << std::endl;
-            return 1;
-        }
-
-        // 创建ServerGuard并开启信号处理
-        std::cout << "服务器创建成功，正在启动..." << std::endl;
-        zener::ServerGuard guard(server.get(), true);
-
-        // 等待服务器退出信号
-        std::cout << "服务器已启动，按Ctrl+C停止..." << std::endl;
-        guard.Wait();
-
-        std::cout << "服务器已关闭" << std::endl;
-        return 0;
-    } catch (const std::exception& e) {
-        std::cerr << "服务器发生严重错误: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cerr << "服务器发生未知严重错误" << std::endl;
-        return 1;
-    }
+        return EXIT_SUCCESS;
 }

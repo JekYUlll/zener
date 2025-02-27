@@ -59,7 +59,8 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     db::SqlConnector::GetInstance().Init(sqlHost, sqlPort, sqlUser, sqlPwd,
                                          dbName, connPoolNum);
 
-    const std::string logDir = "logs"; // 此处直接写死日志位置： ${cwd}/logs/xxx.log
+    const std::string logDir =
+        "logs"; // 此处直接写死日志位置： ${cwd}/logs/xxx.log
     const std::string fullLogDir = _cwd + "/" + logDir;
     if (!Logger::WriteToFile(fullLogDir)) {
         LOG_E("Failed to create log file in directory: {}!", fullLogDir);
@@ -77,7 +78,8 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
           (_connEvent & EPOLLET ? "ET" : "LT"));
     LOG_I("| Log level: {}", logLevel);
     LOG_I("| static path: {}", http::Conn::staticDir);
-    LOG_I("| SqlConnPool num: {0}, ThreadPool num: {1}", connPoolNum, threadNum);
+    LOG_I("| SqlConnPool num: {0}, ThreadPool num: {1}", connPoolNum,
+          threadNum);
     LOG_I("| TimerManager: {}", TIMER_MANAGER_TYPE);
 }
 
@@ -136,18 +138,21 @@ void Server::Start() {
             if (fd == _listenFd) {
                 dealListen();
             } else if (events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
-                if (auto it = _users.find(fd); it != _users.end()) { // 节约一次查找
-                    closeConn(&it->second.conn); // closeConn 内部有 _epoller 和 _users 中的删除
+                if (auto it = _users.find(fd);
+                    it != _users.end()) {        // 节约一次查找
+                    closeConn(&it->second.conn); // closeConn 内部有 _epoller 和
+                                                 // _users 中的删除
                 }
             } else if (events & EPOLLIN) { // @Read
                 if (auto it = _users.find(fd); it != _users.end()) {
                     dealRead(&it->second.conn);
-                } else { /* 和原版不一样的处理：
-                            若 fd 已被关闭或未注册到 _users，但 epoll 仍在监听，
-                            可能因内核事件队列未清空导致事件重复触发
-                            这几行可以加到 dealWrite 等函数内部，但还是在这更清晰 -- 单一职责原则
-                         */
-                    if(!_epoller->DelFd(fd)) { // 从epoll中删除并关闭
+                } else {                        /* 和原版不一样的处理：
+                                                   若 fd 已被关闭或未注册到 _users，但 epoll 仍在监听，
+                                                   可能因内核事件队列未清空导致事件重复触发
+                                                   这几行可以加到 dealWrite
+                                                   等函数内部，但还是在这更清晰 -- 单一职责原则
+                                                */
+                    if (!_epoller->DelFd(fd)) { // 从epoll中删除并关闭
                         LOG_W("Invalid fd: {} from epoll!", fd);
                     }
                     close(fd);
@@ -156,7 +161,7 @@ void Server::Start() {
                 if (auto it = _users.find(fd); it != _users.end()) {
                     dealWrite(&it->second.conn);
                 } else {
-                    if(!_epoller->DelFd(fd)) {
+                    if (!_epoller->DelFd(fd)) {
                         LOG_W("Invalid fd: {} from epoll!", fd);
                     }
                     close(fd);
@@ -181,71 +186,90 @@ void Server::Stop() {
 }
 
 void Server::Shutdown(const int timeoutMS) {
-    LOG_I("Shutdown==========================>");
-    try {
-        _isClose.store(true, std::memory_order_release);
-            TimerManagerImpl::GetInstance().Stop();
-        if (_listenFd >= 0) { // 关闭监听socket，阻止新连接
-            if(!_epoller->DelFd(_listenFd)) { // 从epoll中删除监听socket
-                LOG_E("Failed to del epoll fd {0} when shutdown!", _listenFd);
-            }
-            const int fd = _listenFd;
-            _listenFd = -1; // 先置为-1，避免重复关闭
-            close(fd);
-        }
-        const auto startTime = std::chrono::steady_clock::now();
-        if (auto remainingCount = _users.size(); remainingCount > 0) {
-            LOG_I("Closing {} conns...", remainingCount);
-            std::vector<int> fdsToClose; // 复制所有文件描述符到一个向量中，防止在迭代过程中修改映射
-            fdsToClose.reserve(_users.size());
-            for (const auto& [fd, _] : _users) {
-                if (fd > 0) {
-                    fdsToClose.push_back(fd);
-                }
-            }
-            for (int fd : fdsToClose) {
-                if (auto it = _users.find(fd); it != _users.end()) {
-                    closeConn(&it->second.conn);
-                }
-                auto now = std::chrono::steady_clock::now();
-                const auto timeElapsed =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(
-                        now - startTime)
-                        .count();
-                if (timeoutMS > 0 && timeElapsed >= timeoutMS) {
-                    LOG_W("Time out ({}ms)! still {} conns remain...", timeoutMS,
-                          _users.size());
-                    break;
-                }
-            }
-            if (!_users.empty()) { // 如果仍有连接未关闭，强制清除 // TODO 清除了个寂寞？
-                LOG_W("Force clean {} conns...", _users.size());
-                _users.clear();
-            }
-        }
-        if (_threadpool) {
-            const int poolTimeoutMS =
-                timeoutMS > 0 ? std::min(timeoutMS / 2, 3000) : 3000;
-            _threadpool->Shutdown(poolTimeoutMS);
-        }
-        try {
-            db::SqlConnector::GetInstance().Close();
-        } catch (const std::exception& e) {
-            LOG_E("Failed to close sqlConn: {}!", e.what());
-        }
-        LOG_I(">>>>> Shutdown >>>");
-        Logger::Flush();
-    } catch (const std::exception& e) {
-        LOG_E("Exception closing sqlConn: {}!", e.what());
-    } catch (...) {
-        LOG_E("Unknown exception closing sqlConn!");
+    LOG_I("Shutdown initiated ==========================>");
+    // -------------------- Phase 1: 准备关闭 --------------------
+    _isClose.store(true, std::memory_order_release);
+    TimerManagerImpl::GetInstance().Stop();
+    // 双重唤醒机制确保 epoll_wait 退出
+    constexpr uint64_t wakeValue = 1;
+    if (write(_wakeupFd, &wakeValue, sizeof(wakeValue)) == -1) {
+        LOG_E("Failed to write wakeup fd: {}", strerror(errno));
     }
+    // -------------------- Phase 2: 关闭监听 socket --------------------
+    if (_listenFd >= 0) {
+        std::lock_guard<std::mutex> lock(_connMutex);
+        if (!_epoller->DelFd(_listenFd)) {
+            LOG_E("Failed to close listen fd: {}", strerror(errno));
+        }
+        close(_listenFd);
+        _listenFd = -1;
+    }
+    // -------------------- Phase 3: 关闭现有连接 --------------------
+    const auto shutdownStart = std::chrono::steady_clock::now();
+    std::vector<std::pair<int, ConnInfo>> fdsToClose;
+    { // 缩小锁作用域
+        std::lock_guard<std::mutex> lock(_connMutex);
+        fdsToClose.reserve(_users.size());
+        if (!_users.empty()) {
+            LOG_I("Closing {} active connections...", _users.size());
+            fdsToClose.reserve(_users.size());
+            for (auto& [fd, conn] : _users) {
+                if (fd > 0) {
+                    // 显式构造 pair<int, ConnInfo>，强制右值引用
+                    // fdsToClose.emplace_back(
+                    //     std::piecewise_construct,
+                    //     std::forward_as_tuple(fd), // 隐式转换 const int → int
+                    //     std::forward_as_tuple(std::move(conn)) // 强制触发移动构造
+                    // );
+                    fdsToClose.emplace_back(fd, std::move(conn));
+                }
+            }
+        }
+    }
+    // 异步关闭所有连接（避免阻塞主线程）
+    std::atomic<size_t> remaining = fdsToClose.size();
+    for (auto& [fd, conn] : fdsToClose) {
+        closeConnAsync(fd, [&remaining] { --remaining; });
+    }
+    // 等待连接关闭或超时
+    while (remaining > 0) {
+        constexpr int CHECK_INTERVAL_MS = 50;
+        const auto elapsed =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - shutdownStart)
+                .count();
+        if (timeoutMS > 0 && elapsed >= timeoutMS) {
+            LOG_W("Connection close timeout ({}ms), {} connections remaining",
+                  timeoutMS, remaining.load());
+            break;
+        }
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(CHECK_INTERVAL_MS));
+    }
+    // -------------------- Phase 4: 关闭线程池 --------------------
+    if (_threadpool) {
+        const int poolTimeout = std::max(100, timeoutMS / 2); // 至少 100ms
+        _threadpool->Shutdown(poolTimeout);
+    }
+    // -------------------- Phase 5: 清理残留资源 --------------------
+    {
+        std::lock_guard<std::mutex> lock(_connMutex);
+        _users.clear();
+    }
+    try { // 关闭数据库连接
+        db::SqlConnector::GetInstance().Close();
+    } catch (const std::exception& e) {
+        LOG_E("Database shutdown error: {}", e.what());
+    }
+    LOG_I("Shutdown completed >>>>>>>>>>>>>>>>>>>>>>>>");
+    Logger::Flush();
 }
 
 void Server::sendError(int fd, const char* info) {
     assert(fd > 0);
     if (const auto ret = send(fd, info, strlen(info), 0); ret > 0) {
-        LOG_E("Send error to client {} error: {}! {}", fd, info, strerror(errno));
+        LOG_E("Send error to client {} error: {}! {}", fd, info,
+              strerror(errno));
     }
     close(fd);
 }
@@ -256,8 +280,8 @@ void Server::closeConn(http::Conn* client) {
     LOG_I("Client[{}-{}:{}] closed.", fd, client->GetIP(), client->GetPort());
     uint64_t connId = client->GetConnId();
     if (fd <= 0) {
-        LOG_W("Try to close invalid fd : {}, connId : {}! remove from _users!", fd,
-              connId);
+        LOG_W("Try to close invalid fd : {}, connId : {}! remove from _users!",
+              fd, connId);
         _users.erase(fd); //
         return;
     }
@@ -265,18 +289,78 @@ void Server::closeConn(http::Conn* client) {
         try {
             TimerManagerImpl::GetInstance().CancelByKey(fd);
         } catch (const std::exception& e) {
-            LOG_E("Exception canceling fd {} from timer: connId {}: {}", fd, connId,
-                  e.what());
+            LOG_E("Exception canceling fd {} from timer: connId {}: {}", fd,
+                  connId, e.what());
         } catch (...) {
-            LOG_E("Unknown Exception canceling fd {} from timer: connId {}", fd, connId);
+            LOG_E("Unknown Exception canceling fd {} from timer: connId {}", fd,
+                  connId);
         }
     }
     if (!_epoller->DelFd(fd)) { // 2. 从epoll中删除文件描述符
         LOG_E("Failed to del fd [{}-{}:{}], connId {} from epoll!", fd,
               client->GetIP(), client->GetPort(), connId);
     }
-    client->Close(); // 3. 关闭连接
+    client->Close();  // 3. 关闭连接
     _users.erase(fd); // 4. 从_users映射中删除此连接
+}
+
+// 实际关闭逻辑（与原有 closeConn 逻辑解耦）
+void Server::_closeConnInternal(int fd, const http::Conn& conn) const {
+    LOG_I("Closing fd {} (connId={}) asynchronously", fd, conn.GetConnId());
+    if (_timeoutMS > 0) {
+        try {
+            TimerManagerImpl::GetInstance().CancelByKey(fd);
+        } catch (const std::exception& e) {
+            LOG_E("Timer cancel error: {}", e.what());
+        }
+    }
+    if (!_epoller->DelFd(fd)) {
+        LOG_E("Epoll del fd {} failed", fd);
+    }
+    if (close(fd) == -1) {
+        LOG_E("Close fd {} error: {}", fd, strerror(errno));
+    }
+}
+
+void Server::_closeConnInternal(int fd, http::Conn&& conn) const {
+    LOG_I("Closing fd {} (connId={}) asynchronously", fd, conn.GetConnId());
+    if (_timeoutMS > 0) {
+        try {
+            TimerManagerImpl::GetInstance().CancelByKey(fd);
+        } catch (const std::exception& e) {
+            LOG_E("Timer cancel error: {}", e.what());
+        }
+    }
+    if (!_epoller->DelFd(fd)) {
+        LOG_E("Epoll del fd {} failed", fd);
+    }
+    if (close(fd) == -1) {
+        LOG_E("Close fd {} error: {}", fd, strerror(errno));
+    }
+}
+
+void Server::closeConnAsync(int fd, const std::function<void()>& callback) {
+    ConnInfo connInfoCopy;
+    {
+        std::lock_guard<std::mutex> lock(_connMutex);
+        const auto it = _users.find(fd);
+        if (it == _users.end())
+            return;
+        connInfoCopy = std::move(it->second); // 拷贝连接信息
+    }
+    // 提交到线程池执行关闭操作
+    auto connInfoPtr = std::make_shared<ConnInfo>(std::move(connInfoCopy));
+    _threadpool->AddTask(
+        [this, fd, callback, connInfoPtr]() mutable {
+            // 实际关闭操作（无需锁，使用拷贝数据）
+            _closeConnInternal(fd, std::move(connInfoPtr->conn));
+            {
+                std::lock_guard<std::mutex> lock(_connMutex);
+                _users.erase(fd); // 安全删除
+            }
+            if (callback)
+                callback();
+        });
 }
 
 void Server::addClient(int fd, const sockaddr_in& addr) {
@@ -294,149 +378,145 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
     }
 #endif // !__USE_NO_DELAY
 
-    uint64_t connId = _nextConnId.fetch_add(1, std::memory_order_relaxed); // 为新连接生成唯一ID
-    _users[fd].conn.init(fd, addr);
+    uint64_t connId = _nextConnId.fetch_add(
+        1, std::memory_order_relaxed); // 为新连接生成唯一ID
+    _users[fd].conn.Init(fd, addr);
     _users[fd].connId = connId;
     _users[fd].conn.SetConnId(connId);
     LOG_I("New connection established: fd={}, connId={}", fd, connId);
 
-    if(_timeoutMS > 0) { // 在定时器回调中使用连接ID进行校验
+    if (_timeoutMS > 0) { // 在定时器回调中使用连接ID进行校验
         TimerManagerImpl::GetInstance().ScheduleWithKey(
-        fd, _timeoutMS, 0, [this, fd, connId]() {
-            // 检查文件描述符和连接ID都匹配，防止文件描述符重用导致的错误关闭
-            if (!_isClose.load(std::memory_order_acquire) && _users.count(fd) > 0 &&
-                _users[fd].connId == connId) {
-                closeConn(&_users[fd].conn);
-            }
-        });
+            fd, _timeoutMS, 0, [this, fd, connId]() {
+                // 检查文件描述符和连接ID都匹配，防止文件描述符重用导致的错误关闭
+                if (!_isClose.load(std::memory_order_acquire) &&
+                    _users.count(fd) > 0 && _users[fd].connId == connId) {
+                    closeConn(&_users[fd].conn);
+                }
+            });
     }
     /*
         在 epoll 开始监听 fd 前，必须确保 fd 处于非阻塞模式。
         若顺序颠倒，可能在 epoll_wait 返回事件后，执行阻塞式读写，导致线程卡死
         （尤其在单线程 Reactor 中）
      */
-    if(!setFdNonblock(fd)) {
+    if (setFdNonblock(fd) == -1) {
         LOG_E("Error setFdNonblock: {}! {}", fd, strerror(errno));
+        _users.erase(fd);
+        close(fd);
+        return;
     }
     if (!_epoller->AddFd(fd, EPOLLIN | _connEvent)) {
         LOG_E("Failed to add client fd {} to epoll!", fd);
         _users.erase(fd);
         close(fd);
     } else {
-        LOG_D("Added fd {} to epoll with events {}.", fd,
-              EPOLLIN | _connEvent);
-        LOG_I("Client [{}-{}:{}] in.", fd, _users[fd].conn.GetIP(), _users[fd].conn.GetPort());
+        LOG_D("Added fd {} to epoll with events {}.", fd, EPOLLIN | _connEvent);
+        LOG_I("Client [{}-{}:{}] in.", fd, _users[fd].conn.GetIP(),
+              _users[fd].conn.GetPort());
     }
 }
 
 int Server::setFdNonblock(const int fd) {
     assert(fd > 0);
-    return fcntl(fd, F_SETFL, fcntl(fd, F_GETFD, 0) | O_NONBLOCK);
+    /*
+        fcntl(fd, F_GETFD, 0) 返回的是 文件描述符标志（如 FD_CLOEXEC）
+        而 O_NONBLOCK 属于 ​文件状态标志**，二者的位域完全不同
+        源码疑似有误：
+        return fcntl(fd, F_SETFL, fcntl(fd, F_GETFD, 0) | O_NONBLOCK);
+     */
+    // 1. 获取当前文件状态标志（使用 F_GETFL）
+    const int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) return -1;
+    // 2. 设置非阻塞模式（更新文件状态标志）
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    // return fcntl(fd, F_SETFL, fcntl(fd, F_GETFD, 0) | O_NONBLOCK);
 }
 
 void Server::dealListen() {
     struct sockaddr_in addr{};
     socklen_t len = sizeof(addr);
-
-    // 每次最多接受的新连接数量，防止一次性接受太多连接导致其他任务饥饿
-    constexpr int MAX_ACCEPT_PER_CALL = 50;
-    int acceptCount = 0;
-
-    do {
-        const int fd =
-            accept(_listenFd, reinterpret_cast<struct sockaddr*>(&addr), &len);
-        if (fd <= 0) {
-            return;
+    if (_listenEvent & EPOLLET) { // ET 模式：必须处理所有就绪连接
+        while (true) {
+            const int fd = accept(
+                _listenFd, reinterpret_cast<struct sockaddr*>(&addr), &len);
+            if (fd <= 0)
+                break;
+            if (http::Conn::userCount >= MAX_FD) { // 检查服务器是否已满
+                sendError(fd, "Server busy!");
+                LOG_W("Clients full! Current user count: {}.",
+                      http::Conn::userCount.load());
+                return;
+            }
+            addClient(fd, addr);
         }
-
-        // 检查服务器是否已满
-        if (http::Conn::userCount >= MAX_FD) {
-            sendError(fd, "Server busy!");
-            LOG_W("Clients full! Current user count: {}",
-                  http::Conn::userCount.load());
-            return;
+    } else { // LT 模式：限制单次 accept 数量
+        const int maxAccept =
+            std::min(50, MAX_FD - http::Conn::userCount.load());
+        for (int i = 0; i < maxAccept; ++i) {
+            const int fd = accept(
+                _listenFd, reinterpret_cast<struct sockaddr*>(&addr), &len);
+            if (fd <= 0)
+                break;
+            if (http::Conn::userCount >= MAX_FD) { // 检查服务器是否已满
+                sendError(fd, "Server busy!");
+                LOG_W("Clients full! Current user count: {}.",
+                      http::Conn::userCount.load());
+                return;
+            }
+            addClient(fd, addr);
         }
-
-        addClient(fd, addr);
-
-        // 增加接受连接计数
-        acceptCount++;
-
-        // 如果达到单次最大接受数量，本轮不再接受新连接
-        if (acceptCount >= MAX_ACCEPT_PER_CALL) {
-            LOG_D("Reached maximum accept count per call ({}), will "
-                  "continue "
-                  "in next cycle",
-                  MAX_ACCEPT_PER_CALL);
-            break;
-        }
-    } while (_listenEvent & EPOLLET);
+    }
 }
 
-void Server::dealRead(http::Conn* client) const {
+void Server::dealRead(const http::Conn* client) { // 无比猛烈的异常检查
     assert(client);
     int fd = client->GetFd();
-
-    // 检查文件描述符的有效性
     if (fd <= 0) {
-        LOG_D("dealRead called with invalid fd {}", fd);
+        LOG_D("{} called with invalid fd {}!", __FUNCTION__, fd);
         return;
     }
-
-    // 检查连接是否在_users映射中
     if (_users.count(fd) == 0) {
-        LOG_D("dealRead called for fd {} but not found in _users", fd);
+        LOG_D("{} called for fd {} but not found in _users", __FUNCTION__, fd);
         return;
     }
-
     extentTime(client);
-
-    // 获取当前连接的ID
     uint64_t connId = client->GetConnId();
-
 #ifdef __V0
     // 进一步验证文件描述符并检查是否已关闭
-    if (_isClose) {
+    if (_isClose.load(std::memory_order_acquire)) {
         LOG_D("Server is closing, skip adding read task for fd {}", fd);
         return;
     }
-
-    // 直接使用fd和connId标识连接，不再尝试复制Conn对象
     _threadpool->AddTask([this, fd, connId] {
-        // 捕获任务执行时的潜在异常，防止线程崩溃
         try {
-            // 检查服务器是否已关闭
-            if (_isClose) {
-                LOG_D("Thread pool task aborted: server is closing");
+            if (_isClose.load(std::memory_order_acquire)) {
+                LOG_D("Thread pool task aborted: server is closing.");
                 return;
             }
-
-            // 检查连接是否仍然存在且ID匹配
-            if (_users.count(fd) == 0) {
-                LOG_D("Thread pool task aborted: fd {} no longer in _users map",
-                      fd);
+            if (_users.count(fd) == 0) { // 检查连接是否仍然存在且ID匹配
+                LOG_D(
+                    "Thread pool task aborted: fd {} no longer in _users map.",
+                    fd);
                 return;
             }
-
             if (_users[fd].connId != connId) {
                 LOG_D("Thread pool task aborted: connId mismatch for fd {} "
-                      "(expected {}, found {})",
+                      "(expected {}, found {}).",
                       fd, connId, _users[fd].connId);
                 return;
             }
-
-            // 确保文件描述符仍然有效
-            if (_users[fd].conn.GetFd() > 0) {
+            if (_users[fd].conn.GetFd() > 0) { // 确保文件描述符仍然有效
                 onRead(&_users[fd].conn);
             } else {
                 LOG_D("Thread pool task found invalid fd in conn object for fd "
-                      "{}, connId {}",
+                      "{}, connId {}.",
                       fd, connId);
             }
         } catch (const std::exception& e) {
-            LOG_E("Exception in dealRead thread pool task: {}", e.what());
+            LOG_E("Exception in dealRead thread pool task: {}!", e.what());
         } catch (...) {
-            LOG_E("Unknown exception in dealRead thread pool task");
+            LOG_E("Unknown exception in dealRead thread pool task!");
         }
     });
 #elif
@@ -448,59 +528,49 @@ void Server::dealWrite(const http::Conn* client) {
     assert(client);
     int fd = client->GetFd();
     if (fd <= 0) {
-        LOG_E("dealWrite called with invalid fd {}!", fd);
+        LOG_E("{} called with invalid fd {}!", __FUNCTION__, fd);
         return;
     }
     if (_users.count(fd) == 0) {
-        LOG_E("dealWrite called for fd {} but not found in _users!", fd);
+        LOG_E("{} called for fd {} but not found in _users!", __FUNCTION__, fd);
         return;
     }
     extentTime(client);
-    // 获取当前连接的ID
     uint64_t connId = client->GetConnId();
 #ifdef __V0
-    // 进一步验证文件描述符并检查是否已关闭
-    if (_isClose) {
-        LOG_D("Server is closing, skip adding write task for fd {}", fd);
+    if (_isClose.load(std::memory_order_acquire)) {
+        LOG_D("Server is closing, skip adding write task for fd {}.", fd);
         return;
     }
-
-    // 直接使用fd和connId标识连接，不再尝试复制Conn对象
     _threadpool->AddTask([this, fd, connId] {
-        // 捕获任务执行时的潜在异常，防止线程崩溃
         try {
-            // 检查服务器是否已关闭
             if (_isClose) {
-                LOG_D("Thread pool task aborted: server is closing");
+                LOG_D("Thread pool task aborted: server is closing.");
                 return;
             }
-
-            // 检查连接是否仍然存在且ID匹配
             if (_users.count(fd) == 0) {
-                LOG_D("Thread pool task aborted: fd {} no longer in _users map",
-                      fd);
+                LOG_D(
+                    "Thread pool task aborted: fd {} no longer in _users map.",
+                    fd);
                 return;
             }
-
             if (_users[fd].connId != connId) {
                 LOG_D("Thread pool task aborted: connId mismatch for fd {} "
-                      "(expected {}, found {})",
+                      "(expected {}, found {}).",
                       fd, connId, _users[fd].connId);
                 return;
             }
-
-            // 确保文件描述符仍然有效
             if (_users[fd].conn.GetFd() > 0) {
                 onWrite(&_users[fd].conn);
             } else {
                 LOG_D("Thread pool task found invalid fd in conn object for fd "
-                      "{}, connId {}",
+                      "{}, connId {}.",
                       fd, connId);
             }
         } catch (const std::exception& e) {
-            LOG_E("Exception in dealWrite thread pool task: {}", e.what());
+            LOG_E("Exception in dealWrite thread pool task: {}!", e.what());
         } catch (...) {
-            LOG_E("Unknown exception in dealWrite thread pool task");
+            LOG_E("Unknown exception in dealWrite thread pool task!");
         }
     });
 #elif
@@ -508,130 +578,50 @@ void Server::dealWrite(const http::Conn* client) {
 #endif // __V0
 }
 
-void Server::onWrite(http::Conn* client) const {
-    assert(client);
-    int fd = client->GetFd();
-
-    // 检查文件描述符的有效性
-    if (fd <= 0) {
-        LOG_W("onWrite called with invalid fd {}", fd);
-        return;
-    }
-
-    // 检查连接是否仍然在用户映射中
-    if (_users.count(fd) == 0) {
-        LOG_W("onWrite: fd {} not found in _users map", fd);
-        return;
-    }
-
-    // 获取当前连接ID并验证匹配
-    uint64_t connId = client->GetConnId();
-    if (_users.at(fd).connId != connId) {
-        LOG_W("onWrite: fd {} has mismatched connId (expected {}, got {})", fd,
-              _users.at(fd).connId, connId);
-        return;
-    }
-
-    int ret = -1;
-    int writeErrno = 0;
-
-    ret = client->write(&writeErrno);
-
-    // 扩展连接超时时间，防止大文件传输中连接被关闭
-    extentTime(client);
-
-    if (client->ToWriteBytes() == 0) { // 传输完成
-        if (client->IsKeepAlive()) {
-            // 如果是保持连接的，重新准备接收新的请求
-            onProcess(client);
-            return;
-        }
-        // 非保持连接，传输完成后关闭
-        closeConn(client);
-        return;
-    }
-
-    // 还有数据需要发送
-    if (ret < 0) {
-        if (writeErrno == EAGAIN || writeErrno == EWOULDBLOCK) {
-            // 内核发送缓冲区已满，需要等待可写事件
-            if (!_epoller->ModFd(fd, _connEvent | EPOLLOUT)) {
-                LOG_E("修改fd {}为EPOLLOUT失败!", fd);
-            }
-            return;
-        }
-        // 其他错误，关闭连接
-        LOG_E("写入错误 fd={}, connId={}, errno={}", fd, connId, writeErrno);
-        closeConn(client);
-        return;
-    }
-
-    // ret >= 0 但还有数据需要发送，继续注册EPOLLOUT事件
-    if (client->ToWriteBytes() > 0) {
-        if (!_epoller->ModFd(fd, _connEvent | EPOLLOUT)) {
-            LOG_E("修改fd {}为EPOLLOUT失败!", fd);
-        }
-        LOG_D("文件数据部分发送: fd={}, connId={}, 已发送={}, 剩余={}", fd,
-              connId, ret, client->ToWriteBytes());
-        return;
-    }
-}
-
 void Server::extentTime(const http::Conn* client) {
     assert(client);
     if (_timeoutMS <= 0) {
-        return; // 如果超时未设置，直接返回
+        return;
     }
-
     int fd = client->GetFd();
-
-    // 检查文件描述符的有效性
     if (fd <= 0) {
-        LOG_W("extentTime called with invalid fd {}", fd);
+        LOG_W("{} called with invalid fd {}!", __FUNCTION__, fd);
         return;
     }
-
-    if (_users.count(fd) == 0) { // 查找当前连接的ID
-        LOG_W("extentTime called for fd {} but not found in _users", fd);
+    if (_users.count(fd) == 0) {
+        LOG_W("{} called for fd {} but not found in _users!", __FUNCTION__, fd);
         return;
     }
-
     uint64_t connId = _users.at(fd).connId;
-
-    // 使用ScheduleWithKey，确保每个文件描述符只有一个定时器
-    // 增加额外的检查，确保定时器回调执行时连接仍然有效
+    /*
+        使用ScheduleWithKey，确保每个文件描述符只有一个定时器
+        增加额外的检查，确保定时器回调执行时连接仍然有效
+        webserver 11 里调用了一个 timer_->adjust
+    */
     TimerManagerImpl::GetInstance().ScheduleWithKey(
         fd, _timeoutMS, 0, [this, fd, connId]() {
-            // 先检查服务器是否已关闭
             if (_isClose) {
-                LOG_D("Timer callback aborted: server is closing");
+                LOG_D("Timer callback aborted: server is closing.");
                 return;
             }
-
-
-            if (_users.count(fd) == 0) { // 检查文件描述符和连接ID都匹配
-                LOG_D("Timer callback: connection with fd {} no longer exists",
+            if (_users.count(fd) == 0) {
+                LOG_D("Timer callback: connection with fd {} no longer exists.",
                       fd);
                 return;
             }
-
             if (_users[fd].connId != connId) {
                 LOG_D("Timer callback: connId mismatch for fd {} (expected {}, "
-                      "found {})",
+                      "found {}).",
                       fd, connId, _users[fd].connId);
                 return;
             }
-
-            // 检查文件描述符是否仍然有效
             if (_users[fd].conn.GetFd() <= 0) {
                 LOG_W("Timer callback: invalid fd in conn object for fd {}, "
-                      "connId {}",
+                      "connId {}.",
                       fd, connId);
                 _users.erase(fd);
                 return;
             }
-
-            // 所有检查通过，可以安全关闭连接
             this->closeConn(&this->_users[fd].conn);
         });
 }
@@ -639,38 +629,32 @@ void Server::extentTime(const http::Conn* client) {
 void Server::onRead(http::Conn* client) {
     assert(client);
     int fd = client->GetFd();
-
-    // 检查文件描述符的有效性
     if (fd <= 0) {
-        LOG_W("onRead called with invalid fd {}", fd);
+        LOG_W("{} called with invalid fd {}!", __FUNCTION__, fd);
         return;
     }
-
-    // 检查连接是否仍然在用户映射中
     if (_users.count(fd) == 0) {
-        LOG_W("onRead: fd {} not found in _users map", fd);
+        LOG_W("{}: fd {} not found in _users map!", __FUNCTION__, fd);
         return;
     }
-
-    // TODO 获取当前连接ID并验证匹配
     if (uint64_t connId = client->GetConnId(); _users.at(fd).connId != connId) {
-        LOG_W("onRead: fd {} has mismatched connId (expected {}, got {})", fd,
-              _users.at(fd).connId, connId);
+        LOG_W("{}: fd {} has mismatched connId (expected {}, got {}).",
+              __FUNCTION__, fd, _users.at(fd).connId, connId);
         return;
     }
     int ret = -1;
     int readErrno = 0;
-    ret = client->read(&readErrno);
-
+    ret = client->Read(&readErrno);
     if (ret <= 0 && readErrno != EAGAIN) { // 读取出错或连接关闭
         closeConn(client);
         return;
     }
     if (ret > 0) { // 只有当确实读取到数据时才处理请求
         onProcess(client);
-    } else { { // 如果没有数据，重新注册 EPOLLIN 事件
-        if (!_epoller->ModFd(fd, _connEvent | EPOLLIN))
-            LOG_E("Failed to mod fd {} for EPOLLIN!", fd);
+    } else {
+        { // 如果没有数据，重新注册 EPOLLIN 事件 --原版没有这一步处理
+            if (!_epoller->ModFd(fd, _connEvent | EPOLLIN))
+                LOG_E("Failed to mod fd {} for EPOLLIN!", fd);
         }
     }
 }
@@ -678,27 +662,20 @@ void Server::onRead(http::Conn* client) {
 void Server::onProcess(http::Conn* client) {
     assert(client);
     int fd = client->GetFd();
-
-    // 检查文件描述符的有效性
     if (fd <= 0) {
-        LOG_W("onProcess called with invalid fd {}", fd);
+        LOG_W("{} called with invalid fd {}!", __FUNCTION__, fd);
         return;
     }
-
-    // 检查连接是否仍然在用户映射中
     if (_users.count(fd) == 0) {
-        LOG_W("onProcess: fd {} not found in _users map", fd);
+        LOG_W("{}: fd {} not found in _users map!", __FUNCTION__, fd);
         return;
     }
-
-    // 获取当前连接ID并验证匹配
     if (uint64_t connId = client->GetConnId(); _users.at(fd).connId != connId) {
-        LOG_W("onProcess: fd {} has mismatched connId (expected {}, got {})",
-              fd, _users.at(fd).connId, connId);
+        LOG_W("{}: fd {} has mismatched connId (expected {}, got {}).",
+              __FUNCTION__, fd, _users.at(fd).connId, connId);
         return;
     }
-
-    if (client->process()) {
+    if (client->Process()) {
         if (!_epoller->ModFd(fd, _connEvent | EPOLLOUT)) {
             LOG_E("Failed to mod fd {}!", fd);
         }
@@ -706,6 +683,59 @@ void Server::onProcess(http::Conn* client) {
         if (!_epoller->ModFd(fd, _connEvent | EPOLLIN)) {
             LOG_E("Failed to mod fd {}!", fd);
         }
+    }
+}
+
+void Server::onWrite(http::Conn* client) {
+    assert(client);
+    int fd = client->GetFd();
+    if (fd <= 0) {
+        LOG_W("{} called with invalid fd {}!", __FUNCTION__, fd);
+        return;
+    }
+    if (_users.count(fd) == 0) {
+        LOG_W("{}: fd {} not found in _users map!", __FUNCTION__, fd);
+        return;
+    }
+    uint64_t connId = client->GetConnId();
+    if (_users.at(fd).connId != connId) {
+        LOG_W("{}: fd {} has mismatched connId (expected {}, got {})",
+              __FUNCTION__, fd, _users.at(fd).connId, connId);
+        return;
+    }
+    int ret = -1;
+    int writeErrno = 0;
+    ret = client->Write(&writeErrno);
+    extentTime(client);
+    if (client->ToWriteBytes() == 0) { // 传输完成 TODO 长连接的其他处理？
+        if (client
+                ->IsKeepAlive()) { // 如果是 keep alive 的，重新准备接收新的请求
+            onProcess(client);
+            return;
+        }
+        closeConn(client);
+        return;
+    }
+    if (ret < 0) { // 以下均为新加 TODO check
+        if (writeErrno == EAGAIN || writeErrno == EWOULDBLOCK) {
+            // 内核发送缓冲区已满，需要等待可写事件
+            if (!_epoller->ModFd(fd, _connEvent | EPOLLOUT)) {
+                LOG_E("Failed to adjust fd {} EPOLLOUT!", fd);
+            }
+            return;
+        }
+        LOG_E("Write err: fd:{}, connId:{}, errno:{}.", fd, connId, writeErrno);
+        closeConn(client);
+        return;
+    }
+    // ret >= 0 但还有数据需要发送，继续注册EPOLLOUT事件
+    if (client->ToWriteBytes() > 0) {
+        if (!_epoller->ModFd(fd, _connEvent | EPOLLOUT)) {
+            LOG_E("Failed to adjust fd {} EPOLLOUT!", fd);
+        }
+        LOG_D(
+            "Send part of file: fd:{}, connId:{}, already send {}, remains {}.",
+            fd, connId, ret, client->ToWriteBytes());
     }
 }
 
@@ -727,8 +757,10 @@ bool Server::initSocket() {
             int l_onoff;    // 0=禁用SO_LINGER，非0=启用
             int l_linger;   // 超时时间（单位：秒）
         };
-        - 启用 Linger（l_linger=0）	快速回收端口，避免 TIME_WAIT 占用资源（需权衡数据丢失风险）。
-        - 文件传输或数据库服务禁用Linger, 确保数据完整传输，避免 RST 导致数据丢失。
+        - 启用 Linger（l_linger=0）	快速回收端口，避免 TIME_WAIT
+    占用资源（需权衡数据丢失风险）。
+        - 文件传输或数据库服务禁用Linger, 确保数据完整传输，避免 RST
+    导致数据丢失。
     */
     struct linger optLinger = {};
     if (_openLinger) {
@@ -763,7 +795,8 @@ bool Server::initSocket() {
     ret = setsockopt(_listenFd, IPPROTO_TCP, TCP_NODELAY, &optval,
                      sizeof(optval));
     if (ret < 0) {
-        LOG_W("Failed to set TCP_NODELAY: {}", strerror(errno)); // 不中断继续, 仅警告
+        LOG_W("Failed to set TCP_NODELAY: {}",
+              strerror(errno)); // 不中断继续, 仅警告
     }
 #endif
     ret = bind(_listenFd, reinterpret_cast<struct sockaddr*>(&addr),
@@ -774,9 +807,12 @@ bool Server::initSocket() {
         return false;
     }
     /*
-     * backlog 参数指定了套接字监听队列的预期最大长度，用于存放已完成三次握手但尚未被 accept() 处理的连接
-    */
-    ret = listen(_listenFd, SOMAXCONN); // 使用系统默认最大值，Linux内核会取 backlog 与 SOMAXCONN 的较小值
+     * backlog
+     * 参数指定了套接字监听队列的预期最大长度，用于存放已完成三次握手但尚未被
+     * accept() 处理的连接
+     */
+    ret = listen(_listenFd, SOMAXCONN); // 使用系统默认最大值，Linux内核会取
+                                        // backlog 与 SOMAXCONN 的较小值
     if (ret < 0) {
         LOG_E("Listen port: {0} error!, {1}", _port, strerror(errno));
         close(_listenFd);
@@ -824,5 +860,49 @@ std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath) {
     assert(server);
     return server;
 }
+
+
+    ServerGuard::ServerGuard(v0::Server* srv, const bool useSignals)
+        : _srv(srv), _useSignals(useSignals) {
+        if (_useSignals) {
+            SetupSignalHandlers();
+        }
+        _thread = std::thread([this] {
+            _srv->Start();
+            std::unique_lock<std::mutex> lock(_mutex);
+            _cv.wait(lock, [this] { return _shouldExit.load(); });
+        });
+    }
+
+    ServerGuard::~ServerGuard() {
+        Shutdown();
+        if (_thread.joinable()) {
+            _thread.join();
+        }
+    }
+
+    void ServerGuard::Shutdown() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _shouldExit = true;
+        _cv.notify_all();
+        _srv->Shutdown();
+    }
+
+    void ServerGuard::SetupSignalHandlers() {
+        struct sigaction sa{};
+        sa.sa_handler = SignalHandler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = SA_RESTART;
+        sigaction(SIGINT, &sa, nullptr);
+        sigaction(SIGTERM, &sa, nullptr);
+    }
+
+    void ServerGuard::SignalHandler(int sig) {
+        constexpr char msg[] = "Signal received\n";
+        write(STDERR_FILENO, msg, sizeof(msg) - 1);
+        if (_instance) {
+            _instance->Shutdown();
+        }
+    }
 
 } // namespace zener
