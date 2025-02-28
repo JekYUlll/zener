@@ -9,7 +9,7 @@ std::atomic<bool> g_ShutdownFlag{false};
 void HandleConsoleInput() {
         std::string cmd;
         while (!g_ShutdownFlag) {
-                std::cout << "Enter 'exit' to shutdown server: ";
+                std::cout << "Enter 'exit' to shutdown server: \n";
                 std::getline(std::cin, cmd);
                 if (cmd == "exit") {
                         g_ShutdownFlag = true;

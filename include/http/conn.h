@@ -7,6 +7,8 @@
 // 工作线程的 task
 // 一个工作线程负责调用一个 connector 来处理一条连接
 
+// TODO 连接复用
+
 #include "buffer/buffer.h"
 #include "common.h"
 #include "http/request.h"
@@ -34,10 +36,7 @@ class Conn {
 
     void Init(int sockFd, const sockaddr_in& addr);
 
-    // 设置连接ID
     void SetConnId(const uint64_t id) { _connId = id; }
-
-    // 获取连接ID
     _ZENER_SHORT_FUNC uint64_t GetConnId() const { return _connId; }
 
     void Close();
@@ -74,7 +73,7 @@ class Conn {
   private:
     int _fd;
     struct sockaddr_in _addr{};
-    uint64_t _connId; // 连接唯一标识符
+    uint64_t _connId{0}; // 连接唯一标识符 0为非法值 // TODO 傻逼cursor重复加flag
     bool _isClose{};
 
     int _iovCnt{};

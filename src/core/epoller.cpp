@@ -40,6 +40,7 @@ bool Epoller::ModFd(const int fd, const uint32_t events) const {
 }
 
 bool Epoller::DelFd(const int fd) const {
+    assert(fd >= 0);
     if (fd < 0) {
         return false;
     }

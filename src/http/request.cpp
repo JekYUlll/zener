@@ -66,7 +66,7 @@ bool Request::parse(Buffer& buff) {
         }
         buff.RetrieveUntil(lineEnd + 2);
     }
-    LOG_D("{0}, {1}, {2}", method_.c_str(), path_.c_str(), version_.c_str());
+    LOG_D("{0}, {1}, {2}", _method.c_str(), _path.c_str(), _version.c_str());
     return true;
 }
 

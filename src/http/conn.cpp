@@ -54,16 +54,16 @@ Conn& Conn::operator=(Conn&& other) noexcept {
     return *this;
 }
 
-void Conn::Init(int fd, const sockaddr_in& addr) {
-    assert(fd > 0);
-    ++userCount;
+void Conn::Init(const int sockFd, const sockaddr_in& addr) {
+    assert(sockFd > 0);
+    userCount.fetch_add(1, std::memory_order_acquire);
     _addr = addr;
-    _fd = fd;
+    _fd = sockFd;
     // 连接ID由Server设置，这里不初始化
     _writeBuff.RetrieveAll();
     _readBuff.RetrieveAll();
     _isClose = false;
-    LOG_I("Client {0} [{1}:{2}] in, userCount: {3}", _fd, GetIP(), GetPort(),
+    LOG_I("Client[{}-{}:{}] in, userCount: {}.", _fd, GetIP(), GetPort(),
           static_cast<int>(userCount));
 }
 
@@ -71,16 +71,15 @@ void Conn::Close() {
     _response.UnmapFile();
     if (!_isClose) {
         _isClose = true;
-        --userCount;
+        userCount.fetch_sub(1, std::memory_order_release);
         if (_fd > 0) { // 确保只关闭有效的文件描述符
             close(_fd);
-            LOG_I("Client {0} [{1}:{2}] (connId={3}) quit, userCount: {4}", _fd,
+            LOG_I("Client[{0}-{1}:{2}] (connId={3}) quit, userCount: {4}", _fd,
                   GetIP(), GetPort(), _connId, static_cast<int>(userCount));
         } else {
             LOG_W("Client with invalid fd={} (connId={}) quit, userCount: {}!",
                   _fd, _connId, static_cast<int>(userCount));
         }
-        // @频繁接收到 -1 的文件描述符，是否是这里的问题？ TODO
         _fd = -1; // 关闭后将fd设为-1，防止重复关闭
     }
 }
@@ -222,7 +221,6 @@ ssize_t Conn::Write(int* saveErrno) {
 bool Conn::Process() {
     // 1. 如果读缓冲区为空，直接返回false，不进行后续处理
     if (_readBuff.ReadableBytes() <= 0) {
-        // 降级为调试信息，这是正常情况，不需要作为警告输出
         LOG_D("处理连接 fd={}, connId={}: 读缓冲区为空", _fd, _connId);
         return false;
     }

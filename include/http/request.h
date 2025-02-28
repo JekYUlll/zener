@@ -13,25 +13,12 @@ UserID=string&PWD=string&OrderConfirmation=string                     (请求体
 // 整个项目最麻烦的地方：字符串解析。直接抄了。
 
 #include "buffer/buffer.h"
-// #include "common.h"
-// #include "file/file.h"
-// #include "http/entity.h"
-// #include "http/header.h"
 
-#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 
-namespace zener {
-namespace http {
-
-// enum class HttpMethod {
-//     GET,
-//     PUT,
-//     POST,
-//     PATCH,
-// };
+namespace zener::http {
 
 class Request {
   public:
@@ -53,8 +40,11 @@ class Request {
         CLOSED_CONNECTION,
     };
 
-    Request() { Init(); }
+    Request() : _state({}) { Init(); }
     ~Request() = default;
+    // TODO 本实现在 Coon 移动的时候也进行了移动
+    // 是否允许？是否安全？
+    Request(const Request&) = default;
     Request(Request&&) = default;
     Request& operator=(Request&&) = default;
 
@@ -72,7 +62,7 @@ class Request {
     bool IsKeepAlive() const;
 
     /*
-    todo
+    TODO
     void HttpConn::ParseFormData() {}
     void HttpConn::ParseJson() {}
     */
@@ -117,7 +107,7 @@ class Request {
 //     std::unique_ptr<Header> _pHeader;
 // };
 
-} // namespace http
-} // namespace zener
+} // namespace zener::http
+
 
 #endif // ZENER_HTTP_REQUEST_H

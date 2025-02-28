@@ -12,11 +12,10 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
-namespace zener {
-namespace rbtimer {
+namespace zener::rbtimer {
 
+    /// 即 TimerNode 节点
 class Timer {
     friend class TimerManager;
 
@@ -69,15 +68,13 @@ class TimerManager final : public ITimerManager {
     int GetNextTick() override;
 
     // 基于业务ID取消定时器
-    void CancelByKey(int key);
+    void CancelByKey(uint64_t key);
 
-    // 使用业务ID调度定时器，如客户端fd
+    // 使用业务ID调度定时器 TODO key 改为 uint64_t
     template <typename F, typename... Args>
-    void ScheduleWithKey(int key, int milliseconds, int repeat, F&& f,
+    void ScheduleWithKey(uint64_t key, int milliseconds, int repeat, F&& f,
                          Args&&... args) {
-        // 先取消该key关联的旧定时器
-        CancelByKey(key);
-
+        CancelByKey(key); // 先取消该key关联的旧定时器 TODO 有必要吗？
         auto callback = [this, key, func = std::forward<F>(f),
                          tup = std::make_tuple(std::forward<Args>(args)...)]() {
             // 执行回调前先检查key是否仍然有效
@@ -98,7 +95,7 @@ class TimerManager final : public ITimerManager {
                            const std::function<void()>& cb);
 
     // 内部方法：在持有锁的情况下取消定时器
-    void CancelByKeyInternal(int key);
+    void CancelByKeyInternal(uint64_t key);
 
     // 清理已取消但仍在队列中的定时器
     void CleanupCancelledTimers();
@@ -111,13 +108,14 @@ class TimerManager final : public ITimerManager {
     int _nextId{0}; // 为每个计时器生成唯一ID
     std::unordered_map<int, std::pair<int, int>>
         _repeats{}; // ID -> (repeat count, period)
-    std::unordered_map<int, int> _keyToTimerId{}; // 业务ID -> 定时器ID的映射
+    // TODO 有必要吗？ 我直接传 connId 当 key. 后面查看这个map作用
+    std::unordered_map<uint64_t, int> _keyToTimerId{}; // 业务ID -> 定时器ID的映射
 
     // 线程安全相关
     mutable std::shared_mutex _timerMutex; // 读写锁保护定时器操作
 };
 
-} // namespace rbtimer
-} // namespace zener
+} // namespace zener::rbtimer
+
 
 #endif // !ZENER_MULTIMAP_TIMER_H

@@ -14,7 +14,7 @@ namespace zener::v0 {
 
 class ThreadPool {
 public:
-    explicit ThreadPool(size_t threadCount = std::thread::hardware_concurrency())
+    explicit ThreadPool(const size_t threadCount = std::thread::hardware_concurrency() - 2)
         : _pool(std::make_shared<Pool>()) {
         assert(threadCount > 0);
         _pool->threads.reserve(threadCount);
@@ -26,11 +26,11 @@ public:
                     if (!pool->tasks.empty()) {
                         auto task = std::move(pool->tasks.front());
                         pool->tasks.pop();
-                        pool->activeThreads++;
+                        ++pool->activeThreads;
                         lock.unlock();
                         task();
                         lock.lock();
-                        pool->activeThreads--;
+                        --pool->activeThreads;
                     } else {
                         pool->cond.wait(lock);
                     }
@@ -44,16 +44,15 @@ public:
     }
 
     template <typename F>
-    void AddTask(F&& task) {
-        std::packaged_task<void()> packagedTask(std::forward<F>(task));
-        {
+    void AddTask(F&& task) { {
+            std::packaged_task<void()> packagedTask(std::forward<F>(task));
             std::lock_guard<std::mutex> lock(_pool->mtx);
             _pool->tasks.emplace(std::move(packagedTask));
         }
         _pool->cond.notify_one();
     }
 
-    void Shutdown(int timeoutMS = 1000) {
+    void Shutdown(int timeoutMS = 1000) const {
         if (!_pool) return;
         LOG_I("ThreadPool: Initiating shutdown (timeout={}ms)...", timeoutMS);
 
@@ -63,7 +62,6 @@ public:
             _pool->isClosed = true;
             _pool->cond.notify_all();
         }
-
         // 等待任务完成或超时
         auto completionFuture = std::async(std::launch::async, [this, timeoutMS] {
             std::unique_lock<std::mutex> lock(_pool->mtx);
@@ -81,11 +79,9 @@ public:
         // -------------------- Phase 2: 强制关闭 --------------------
         {
             std::lock_guard<std::mutex> lock(_pool->mtx);
-            // 清空任务队列（兼容 C++11）
             while (!_pool->tasks.empty()) {
                 _pool->tasks.pop();
             }
-
             // 分离线程
             for (auto& thread : _pool->threads) {
                 if (thread.joinable()) {

@@ -414,38 +414,27 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
     }
 }
 
-void TimerManager::CancelByKey(const int key) {
-    std::unique_lock<std::shared_mutex> lock(_timerMutex);
+// TODO 检查实际使用是传递的fd还是id？
+void TimerManager::CancelByKey(const uint64_t key) {
+    std::unique_lock<std::shared_mutex> lock(_timerMutex); // // 写锁
     CancelByKeyInternal(key);
 }
 
-void TimerManager::CancelByKeyInternal(int key) {
+void TimerManager::CancelByKeyInternal(uint64_t key) {
     try {
-        LOG_D("定时器：尝试取消key={}的定时器", key);
-
         if (const auto keyIt = _keyToTimerId.find(key); keyIt != _keyToTimerId.end()) {
             const int timerId = keyIt->second;
-            LOG_D("定时器：找到key={}关联的定时器id={}", key, timerId);
-
-            // 从映射中删除关联
             _keyToTimerId.erase(keyIt);
-
-            // 清理重复信息
             if (const auto repeatIt = _repeats.find(timerId); repeatIt != _repeats.end()) {
                 _repeats.erase(repeatIt);
-                LOG_D("定时器：已清理id={}的重复信息", timerId);
             }
-
             // 注意：由于红黑树实现的限制，我们无法直接删除特定ID的定时器
             // 它将在下次Update()时被跳过，因为其关联的key不再存在于_keyToTimerId中
-            LOG_D("定时器：定时器id={}将在下次触发时自动跳过", timerId);
-        } else {
-            LOG_D("定时器：未找到key={}关联的定时器", key);
         }
     } catch (const std::exception& e) {
-        LOG_E("定时器：取消key={}的定时器时发生异常，错误={}", key, e.what());
+        LOG_E("Canceling key:{} exception:{}", key, e.what());
     } catch (...) {
-        LOG_E("定时器：取消key={}的定时器时发生未知异常", key);
+        LOG_E("Canceling key:{} exception", key);
     }
 }
 

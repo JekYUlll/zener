@@ -13,6 +13,8 @@
 // 可以使用 boost::lockfree::queue
 // 使用基于数组的循环缓冲区（ring buffer）
 
+// TODO 初始化/连接mysql失败的重连
+
 // #include "database/db_mysql.h"
 
 #include <condition_variable>

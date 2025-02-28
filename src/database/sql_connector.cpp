@@ -20,15 +20,17 @@ void SqlConnector::Init(const char* host, const unsigned int port,
         MYSQL* sql = nullptr;
         sql = mysql_init(sql);
         if (!sql) {
-            LOG_E("MYSQL init error! -{}", __FUNCTION__);
+            LOG_E("MYSQL[{}] init error!", i);
             assert(sql);
+            continue;
         }
         sql =
             mysql_real_connect(sql, host, user, pwd, dbName, port, nullptr, 0);
         if (!sql) {
-            LOG_E("MYSQL connect error! -{}", __FUNCTION__);
+            LOG_E("MYSQL[{}] connect error!", i);  // TODO 重连
+            continue;
         }
-        LOG_I("Connected {} to MYSQL. database: {}.", i, dbName);
+        LOG_I("Connected to MYSQL[{}], database: {}.", i, dbName);
         _connQue.push(sql);
     }
     _maxConnSize = size;
@@ -54,7 +56,7 @@ void SqlConnector::FreeConn(MYSQL* sql) {
     assert(sql);
     {
         std::lock_guard<std::mutex> locker(_mtx);
-        _connQue.push(sql);
+        _connQue.push(sql); // 放回连接池
     }
 }
 
