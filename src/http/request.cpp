@@ -66,7 +66,7 @@ bool Request::parse(Buffer& buff) {
         }
         buff.RetrieveUntil(lineEnd + 2);
     }
-    LOG_D("{0}, {1}, {2}", _method.c_str(), _path.c_str(), _version.c_str());
+    LOG_D("{}, {}, {}", _method, _path, _version);
     return true;
 }
 
@@ -93,7 +93,7 @@ bool Request::parseRequestLine(const std::string& line) {
         _state = HEADERS;
         return true;
     }
-    LOG_E("RequestLine Error! line: {}", line);
+    LOG_W("RequestLine Error! line: {}", line);
     return false;
 }
 
@@ -110,7 +110,7 @@ void Request::parseBody(const std::string& line) {
     _body = line;
     parsePost();
     _state = FINISH;
-    LOG_D("Body:{0}, len:{1}", line.c_str(), line.size());
+    LOG_D("Body:{}, len:{}", line, line.length());
 }
 
 int Request::convertHex(const char ch) {
@@ -129,8 +129,7 @@ void Request::parsePost() {
             int tag = DEFAULT_HTML_TAG.find(_path)->second;
             LOG_D("Tag:{}", tag);
             if (tag == 0 || tag == 1) {
-                bool isLogin = (tag == 1);
-                if (userVerify(_post["username"], _post["password"], isLogin)) {
+                if (const bool isLogin = (tag == 1); userVerify(_post["username"], _post["password"], isLogin)) {
                     _path = "/welcome.html";
                 } else {
                     _path = "/error.html";
@@ -144,14 +143,12 @@ void Request::parseFromUrlencoded() {
     if (_body.empty()) {
         return;
     }
-
     std::string key, value;
     int num = 0;
-    int n = _body.size();
+    const size_t n = _body.size();
     int i = 0, j = 0;
-
     for (; i < n; i++) {
-        char ch = _body[i];
+        const char ch = _body[i];
         switch (ch) {
         case '=':
             key = _body.substr(j, i - j);
@@ -170,7 +167,7 @@ void Request::parseFromUrlencoded() {
             value = _body.substr(j, i - j);
             j = i + 1;
             _post[key] = value;
-            LOG_D("{0} = {1}", key.c_str(), value.c_str());
+            LOG_D("{} = {}", key, value);
             break;
         default:
             break;
@@ -184,13 +181,13 @@ void Request::parseFromUrlencoded() {
 }
 
 bool Request::userVerify(const std::string& name, const std::string& pwd,
-                         bool isLogin) {
-    if (name == "" || pwd == "") {
+                         const bool isLogin) {
+    if (name.empty() || pwd.empty()) {
         return false;
     }
     LOG_I("Verify name:{0} pwd:{1}", name.c_str(), pwd.c_str());
     MYSQL* sql;
-    // 原代码里此处只调用构造函数，未实例化？
+    // 原代码里此处只调用构造函数，未实例化
     db::SqlConnRAII raii(&sql, &db::SqlConnector::GetInstance());
     assert(sql);
 
@@ -210,12 +207,29 @@ bool Request::userVerify(const std::string& name, const std::string& pwd,
     LOG_D("{}", order);
 
     if (mysql_query(sql, order)) {
+        /*
+            逻辑疑似错误
+        */
         mysql_free_result(res);
         return false;
     }
     res = mysql_store_result(sql);
+    if (!res) {
+        LOG_E("MYSQL store result failed: {}", mysql_error(sql));
+        return false;
+    }
+    /*
+        mysql_num_fields主要用于 ​获取
+        MySQL查询结果集的字段数量（列数）
+    */
     j = mysql_num_fields(res);
     fields = mysql_fetch_fields(res);
+    if (fields) {
+        for (unsigned int i = 0; i < j; i++) {
+            LOG_I("Field {}: name={}, type={}", i, fields[i].name,
+                  fields[i].type);
+        }
+    }
 
     while (MYSQL_ROW row = mysql_fetch_row(res)) {
         LOG_D("MYSQL ROW: {0} {1}", row[0], row[1]);
@@ -226,18 +240,17 @@ bool Request::userVerify(const std::string& name, const std::string& pwd,
                 flag = true;
             } else {
                 flag = false;
-                LOG_D("pwd error!");
+                LOG_D("Pwd error!");
             }
         } else {
             flag = false;
-            LOG_D("user used!");
+            LOG_D("User used!");
         }
     }
     mysql_free_result(res);
-
     /* 注册行为 且 用户名未被使用*/
     if (!isLogin && flag == true) {
-        LOG_D("regirster!");
+        LOG_D("Regirster.");
         bzero(order, 256);
         snprintf(order, 256,
                  "INSERT INTO user(username, password) VALUES('%s','%s')",
@@ -249,8 +262,8 @@ bool Request::userVerify(const std::string& name, const std::string& pwd,
         }
         flag = true;
     }
-    db::SqlConnector::GetInstance().FreeConn(sql);
-    LOG_D("UserVerify success!!");
+    // db::SqlConnector::GetInstance().FreeConn(sql); // RAII 处理
+    LOG_D("User {} verify success!", name);
     return flag;
 }
 

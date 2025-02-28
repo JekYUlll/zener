@@ -39,7 +39,7 @@ void SqlConnector::Init(const char* host, const unsigned int port,
 MYSQL* SqlConnector::GetConn() {
     MYSQL* sql = nullptr;
     {
-        std::unique_lock<std::mutex> locker(_mtx);
+        std::unique_lock locker(_mtx);
         if (_connQue.empty()) {
             LOG_W("SQL connect pool busy!");
         } else {
@@ -62,7 +62,7 @@ void SqlConnector::FreeConn(MYSQL* sql) {
 
 void SqlConnector::Close() {
     {
-        std::lock_guard<std::mutex> locker(_mtx);
+        std::lock_guard locker(_mtx);
         while (!_connQue.empty()) {
             const auto sql = _connQue.front();
             _connQue.pop();
@@ -73,7 +73,7 @@ void SqlConnector::Close() {
 }
 
 size_t SqlConnector::GetFreeConnCount() const {
-    std::lock_guard<std::mutex> locker(_mtx);
+    std::lock_guard locker(_mtx);
     return _connQue.size();
 }
 

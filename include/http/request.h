@@ -40,7 +40,8 @@ class Request {
         CLOSED_CONNECTION,
     };
 
-    Request() : _state({}) { Init(); }
+    // 初始化无所谓，在Init中
+    Request() : _state(REQUEST_LINE) { Init(); }
     ~Request() = default;
     // TODO 本实现在 Coon 移动的时候也进行了移动
     // 是否允许？是否安全？
@@ -49,17 +50,17 @@ class Request {
     Request& operator=(Request&&) = default;
 
     void Init();
-    bool parse(Buffer& buff);
+    [[nodiscard]] bool parse(Buffer& buff);
 
-    _ZENER_SHORT_FUNC std::string path() const { return _path; }
-    _ZENER_SHORT_FUNC std::string& path() { return _path; }
+    _ZENER_SHORT_FUNC std::string Path() const { return _path; }
+    _ZENER_SHORT_FUNC std::string& Path() { return _path; }
 
-    std::string method() const;
-    std::string version() const;
+    std::string Method() const;
+    std::string Version() const;
     std::string GetPost(const std::string& key) const;
     std::string GetPost(const char* key) const;
 
-    bool IsKeepAlive() const;
+    [[nodiscard]] bool IsKeepAlive() const;
 
     /*
     TODO
@@ -108,6 +109,5 @@ class Request {
 // };
 
 } // namespace zener::http
-
 
 #endif // ZENER_HTTP_REQUEST_H

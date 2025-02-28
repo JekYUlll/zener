@@ -16,7 +16,7 @@ class Response {
     Response(Response&&) = default;
     Response& operator=(Response&&) = default;
 
-    void Init(const std::string& srcDir, const std::string& path,
+    void Init(const std::string& staticDir, const std::string& path,
               bool isKeepAlive, int code);
     void MakeResponse(Buffer& buff);
     void UnmapFile();
@@ -24,7 +24,7 @@ class Response {
 
     [[nodiscard]] char* File() const;
     [[nodiscard]] size_t FileLen() const;
-    [[nodiscard]] int Code() const { return _code; }
+    _ZENER_SHORT_FUNC int Code() const { return _code; }
 
   private:
     void addStateLine(Buffer& buff);
@@ -37,9 +37,12 @@ class Response {
 
     int _code;
     bool _isKeepAlive;
+
     std::string _path;
-    std::string _srcDir;
-    std::string _cachedFilePath;
+    std::string _staticDir;
+
+    std::string _cachedFilePath; // 废弃的 cache
+
     char* _file;
     struct stat _fileStat{};
 

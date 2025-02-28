@@ -52,8 +52,10 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
 
     if (!initSocket()) {
         _isClose.store(
-            false, std::memory_order_release); // TODO
-                    // 此处应退出，但是没有正常退出，应该直接触发ServerGuard的信号？
+            false,
+            std::
+                memory_order_release); // TODO
+                                       // 此处应退出，但是没有正常退出，应该直接触发ServerGuard的信号？
         throw std::runtime_error("Failed to initialize listen socket.");
     }
 
@@ -73,14 +75,13 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     LOG_I("  / /|  _| |  \\| |  _| | |_) |");
     LOG_I(" / /_| |___| |\\  | |___|  _ <");
     LOG_I("/____|_____|_| \\_|_____|_| \\_\\");
-    LOG_I("| port: {0}, OpenLinger: {1}", port, optLinger ? "true" : "false");
-    LOG_I("| Listen Mode: {0}, OpenConn Mode: {1}",
+    LOG_I("| port: {}, OpenLinger: {}", port, optLinger ? "true" : "false");
+    LOG_I("| Listen Mode: {}, OpenConn Mode: {}",
           (_listenEvent & EPOLLET ? "ET" : "LT"),
           (_connEvent & EPOLLET ? "ET" : "LT"));
     LOG_I("| Log level: {}", logLevel);
     LOG_I("| static path: {}", http::Conn::staticDir);
-    LOG_I("| SqlConnPool num: {0}, ThreadPool num: {1}", connPoolNum,
-          threadNum);
+    LOG_I("| SqlConnPool num: {}, ThreadPool num: {}", connPoolNum, threadNum);
     LOG_I("| TimerManager: {}", TIMER_MANAGER_TYPE);
 }
 
@@ -94,7 +95,7 @@ Server::~Server() {
 }
 
 // TODO 我在 Epoller 里也设置了 trigMode 的设置与检查
-    ///@thread 安全
+///@thread 安全
 void Server::initEventMode(const int trigMode) {
     _listenEvent = EPOLLRDHUP;
     _connEvent = EPOLLONESHOT | EPOLLRDHUP;
@@ -119,12 +120,13 @@ void Server::initEventMode(const int trigMode) {
     http::Conn::isET = (_connEvent & EPOLLET);
 }
 
-    ///@thread 单线程
-void Server::Start() {
+///@thread 单线程
+void Server::Run() {
     /*
      * TODO 加读锁
      * 设计失误：如何对 _users 加锁？WebServer 里用的 users map，但无需加锁
-     * 多个线程都会访问 _users ，主循环中也会访问。如果对主循环加锁，会导致很多线程阻塞
+     * 多个线程都会访问 _users
+     * ，主循环中也会访问。如果对主循环加锁，会导致很多线程阻塞
      * 合理的设计是：只在主循环中访问 _users
      */
     std::shared_lock readLocker(_connMutex, std::defer_lock);
@@ -147,7 +149,6 @@ void Server::Start() {
             if (fd == _listenFd) {
                 dealListen();
             } else if (events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
-                readLocker.lock();
                 /*
                  *TODO 想出来的比较阴间的操作：
                  *如果不存在于 _users map 中（只会在错误下出现）：
@@ -155,7 +156,8 @@ void Server::Start() {
                  *则 conn 会是 nullptr，connId 是 0
                  *但下次调用会查找到对象，且为默认初始化的不合法对象。
                  *所以在其他地方要进行判断。
-                */
+                 */
+                readLocker.lock();
                 const auto conn = _users[fd].conn.get();
                 readLocker.unlock();
                 assert(conn);
@@ -200,7 +202,7 @@ void Server::Start() {
     }
 }
 
-    ///@thread 安全
+///@thread 安全
 void Server::Stop() {
     if (close(_listenFd) != 0) {
         LOG_E("Failed to close listen fd {0} : {1}", _listenFd,
@@ -282,7 +284,7 @@ void Server::Shutdown(const int timeoutMS) {
         _threadpool->Shutdown(poolTimeout);
     }
     { // -------------------- Phase 5: 清理残留资源 --------------------
-        std::unique_lock lock(_connMutex);
+        std::unique_lock locker(_connMutex);
         _users.clear();
     }
     try { // 关闭数据库连接
@@ -294,7 +296,7 @@ void Server::Shutdown(const int timeoutMS) {
     Logger::Flush();
 }
 
-    ///@thread 安全
+///@thread 安全
 void Server::sendError(int fd, const char* info) {
     assert(fd > 0);
     if (const auto ret = send(fd, info, strlen(info), 0); ret > 0) {
@@ -309,16 +311,21 @@ void Server::sendError(int fd, const char* info) {
 ///@important 内部有锁
 ///@todo 能否检测重复关闭？对 client 的操作是否线程安全？
 ///@thread 安全
-void Server::closeConn(const http::Conn* client) {
+void Server::closeConn(http::Conn* client) {
     assert(client);
+    if (!client) {
+        LOG_D("Client is null!");
+        return;
+    }
     std::unique_lock writeLocker(_connMutex, std::defer_lock);
     int fd = client->GetFd();
+    assert(fd > 0);
     uint64_t connId = client->GetConnId();
     if (fd <= 0) {
         LOG_W("Closing invalid fd: {}, connId: {}! remove from _users.", fd,
               connId);
         writeLocker.lock();
-            _users.erase(fd); // *
+        _users.erase(fd); // *
         writeLocker.unlock();
         return;
     }
@@ -342,18 +349,21 @@ void Server::closeConn(const http::Conn* client) {
             }
         }
     }
-    if (!_epoller->DelFd(fd)) { // 2. 从epoll中删除文件描述符
-        LOG_E("Failed to del fd [{}-{}:{}], connId {} from epoll!", fd,
-              client->GetIP(), client->GetPort(), connId);
+    if (!_epoller->DelFd(fd)) {
+        LOG_E("Failed to del fd {}, connId {} from epoll!", fd, connId);
     }
     writeLocker.lock();
     if (const auto it = _users.find(fd); it != _users.end()) {
         it->second.active.store(false, std::memory_order_release);
         it->second.connId = 0;
-        // close(fd); // TODO 是否需要？
+        // close(fd); // TODO 是否需要？ 原方案里没有close
         _users.erase(fd);
     }
     writeLocker.unlock();
+    // TODO !!!!! ERROR 严重
+    // if(client) { // TODO 之前竟然一直忘了调用 Close() --> 调用之后反而宕机 不是段错误，而是信号
+    //     client->Close();
+    // }
 }
 
 ///@intro 没必要传入fd，传入 conn 就够了
@@ -361,8 +371,11 @@ void Server::closeConn(const http::Conn* client) {
 ///@thread 安全
 void Server::_closeConnInternal(http::Conn&& client) const {
     auto fd = client.GetFd();
-    auto connId = client.GetConnId();
     assert(fd > 0);
+    if (fd <= 0) {
+        return;
+    }
+    auto connId = client.GetConnId();
     assert(connId > 0);
     LOG_T("Closing fd {} (connId={}) asynchronously.", fd, connId);
     if (_timeoutMS > 0) {
@@ -381,7 +394,7 @@ void Server::_closeConnInternal(http::Conn&& client) const {
     }
 }
 
-    ///@thread 安全
+///@thread 安全
 void Server::closeConnAsync(int fd, const std::function<void()>& callback) {
     ConnInfo connInfoCopy{};
     { // TODO 检查 _users 中的删除流程是否正确
@@ -406,7 +419,7 @@ void Server::closeConnAsync(int fd, const std::function<void()>& callback) {
         });
 }
 
-    ///@thread 安全
+///@thread 安全
 void Server::addClient(int fd, const sockaddr_in& addr) {
     assert(fd > 0);
     std::unique_lock writeLock(_connMutex, std::defer_lock);
@@ -417,52 +430,76 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
     }
 #endif // !__USE_NO_DELAY
     uint64_t connId = _nextConnId.fetch_add(
-        1, std::memory_order_relaxed); // 为新连接生成唯一ID
+        1, std::memory_order_acquire); // 为新连接生成唯一ID
     try {
         /*
+            把 fd 添加进 _users 表，并且生成对应的 conn
             conn初始化 防止出错被覆盖
         */
-        writeLock.lock();
-        auto [it, inserted] = _users.try_emplace(fd);
-        assert(inserted);
-        if (!inserted) {
+        if constexpr (true) {
+            writeLock.lock();
+            // 当键存在时不执行操作，否则插入
+            auto [it, inserted] = _users.try_emplace(fd);
+            assert(inserted);
+            if (!inserted) {
+                /*
+                 * TODO ERROR 严重
+                 * TODO 多次触发 未解决 倒是不会宕机
+                 * TODO 重新连接仍然被占用，导致无法连接
+                 * fd 被快速复用，而旧的连接信息未及时从 _users 中清理干净
+                 * deepseek说必须立即关闭 fd！否则会导致 文件描述符泄漏
+                 * 测了一下发现并不会
+                 * 是否在什么地方忘了从 _users 里 erase？
+                 */
+                LOG_E("Duplicate fd {} detected!", fd);
+                close(fd); // 没啥影响
+                return;
+            }
+            auto& connInfo = it->second;
+            auto conn = std::make_unique<http::Conn>();
             /*
-             * TODO 多次触发 未解决 倒是不会宕机
-             * fd 被快速复用，而旧的连接信息未及时从 _users 中清理干净
-             * deepseek说必须立即关闭 fd！否则会导致 文件描述符泄漏
-             * 测了一下发现并不会
+             *TODO 此处为业务id赋值
+             *实际上添加计时器等，用的是外层 ConnInfo 里的。这里似乎意义不明
              */
-            LOG_E("Duplicate fd {} detected!", fd);
-            close(fd); // ?
-            return;
+            conn->SetConnId(connId);
+            conn->Init(fd, addr);
+            connInfo.connId = connId;
+            connInfo.conn = std::move(conn);
+            writeLock.unlock();
+        } else {
+            // 测试使用简单逻辑 使用.at()会抛异常
+            // 以下逻辑直接卡死，0连接
+            writeLock.lock();
+            _users[fd].connId = connId;
+            _users[fd].conn->Init(fd, addr);
+            _users[fd].conn->SetConnId(connId);
+            writeLock.unlock();
         }
-        auto& connInfo = it->second;
-        auto conn = std::make_unique<http::Conn>();
-        conn->SetConnId(connId);
-        conn->Init(fd, addr);
-        connInfo.connId = connId;
-        connInfo.conn = std::move(conn);
-        writeLock.unlock();
 
     } catch (const std::exception& e) {
         LOG_E("Add client exception. fd:{}. id:{}. {}", fd, connId, e.what());
     }
     /*
-     * @设置超时取消 此处传入 connId 和 fd
+     * 设置超时取消 此处传入 connId 和 fd
      * 在定时器回调中使用 connId 进行校验
      */
     if (_timeoutMS > 0) {
         TimerManagerImpl::GetInstance().ScheduleWithKey(
             fd, _timeoutMS, 0, [this, fd, connId]() {
                 // 检查文件描述符和连接ID都匹配，防止文件描述符重用导致的错误关闭
-                const http::Conn* conn = nullptr;
+                assert(fd > 0);
+                assert(connId > 0);
+                http::Conn* conn = nullptr;
                 {
                     std::shared_lock readLock(_connMutex, std::defer_lock);
-                    if (!_isClose.load() && _users.count(fd) > 0 && _users[fd].connId == connId) {
+                    if (!_isClose.load() && _users.count(fd) > 0 &&
+                        _users[fd].connId == connId) {
                         conn = _users[fd].conn.get();
                     }
                 }
-                if (conn) { closeConn(conn); }
+                if (conn) {
+                    closeConn(conn);
+                }
             });
     }
     /*
@@ -484,15 +521,11 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
         _users.erase(fd);
         writeLock.unlock();
         close(fd);
-    } else {
-        assert(_users[fd].conn); // 可能会访问空指针？
-        // TODO 线程不安全
-        LOG_I("Client [{}-{}:{}] in.", fd, _users[fd].conn->GetIP(),
-              _users[fd].conn->GetPort());
     }
+    LOG_T("Set client({}) id:{}.", fd, connId);
 }
 
-    ///@thread 安全
+///@thread 安全
 int Server::setFdNonblock(const int fd) {
     assert(fd > 0);
     /*
@@ -509,15 +542,15 @@ int Server::setFdNonblock(const int fd) {
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-    ///@thread 安全
+///@thread 安全
 int Server::setNoDelay(const int fd) {
     constexpr int optval = 1;
     return setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval));
 }
 
-    ///@thread 安全
+///@thread 安全
 bool Server::checkServerNotFull(const int fd) {
-    if (http::Conn::userCount.load(std::memory_order_release) >= MAX_FD) {
+    if (http::Conn::userCount.load(std::memory_order_acquire) >= MAX_FD) {
         sendError(fd, "Server busy!");
         LOG_W("Clients full! Current user count: {}.",
               http::Conn::userCount.load());
@@ -567,44 +600,60 @@ void Server::dealListen() {
     }
 }
 
+///@thread 安全
 void Server::dealRead(http::Conn* client) {
     assert(client);
+    if (!client) {
+        return;
+    }
     int fd = client->GetFd();
     assert(fd > 0);
     if (fd <= 0) {
         LOG_W("Invalid fd {}!", fd);
         return;
     }
-    if (_users.count(fd) == 0) {
+    std::shared_lock readLocker(_connMutex, std::defer_lock);
+    readLocker.lock();
+    const size_t ret = _users.count(fd);
+    readLocker.unlock();
+    if (ret == 0) {
         LOG_W("Fd {} is not in _users!", fd);
         return;
     }
     extentTime(client); // TODO 两种计时器处理差异的本质所在
-    _threadpool->AddTask([this, client] {
-        onRead(client);
-    });
+    _threadpool->AddTask([this, client] { onRead(client); });
 }
 
+///@thread 安全
 void Server::dealWrite(http::Conn* client) {
     assert(client);
+    if (!client) {
+        return;
+    }
     int fd = client->GetFd();
     if (fd <= 0) {
         LOG_E("Invalid fd {}!", fd);
         return;
     }
-    if (_users.count(fd) == 0) {
+    std::shared_lock readLocker(_connMutex, std::defer_lock);
+    readLocker.lock();
+    const size_t ret = _users.count(fd);
+    readLocker.unlock();
+    if (ret == 0) {
         LOG_E("Fd {} not found in _users!", fd);
         return;
     }
     extentTime(client);
-    _threadpool->AddTask([this, client] {
-        onWrite(client);
-    });
+    _threadpool->AddTask([this, client] { onWrite(client); });
 }
 
-void Server::extentTime(const http::Conn* client) {
+///@thread 安全
+void Server::extentTime(http::Conn* client) {
     assert(client);
-    std::shared_lock locker(this->_connMutex, std::defer_lock);
+    if (!client) {
+        return;
+    }
+    std::shared_lock readLocker(this->_connMutex, std::defer_lock);
     if (_timeoutMS <= 0) {
         return;
     }
@@ -613,24 +662,27 @@ void Server::extentTime(const http::Conn* client) {
         LOG_W("Invalid fd:{}!", fd);
         return;
     }
-    locker.lock();
+    readLocker.lock();
     if (_users.count(fd) == 0) {
         LOG_W("Fd not found in _users!", fd);
         return;
     }
     uint64_t connId = _users.at(fd).connId;
-    locker.unlock();
+    readLocker.unlock();
     /*
         使用ScheduleWithKey，确保每个文件描述符只有一个定时器
         webserver 11 里只调用了一个 timer_->adjust
     */
+    // TODO 此处可能有重复关闭的问题？又添加了一个新的定时器
+    // 没有细看Timer实现，不知道原本的有没有取消
+    // TimerManagerImpl::GetInstance().CancelByKey(connId); // TODO ??
     TimerManagerImpl::GetInstance().ScheduleWithKey(
         fd, _timeoutMS, 0, [this, fd, connId]() {
-            if (_isClose) {
+            if (_isClose.load(std::memory_order_acquire)) {
                 LOG_D("Timer callback aborted: server is closing.");
                 return;
             }
-            const http::Conn* conn = nullptr;
+            http::Conn* conn = nullptr;
             {
                 std::shared_lock lk(this->_connMutex);
                 if (_users[fd].connId != connId) {
@@ -640,7 +692,7 @@ void Server::extentTime(const http::Conn* client) {
                 }
                 conn = _users[fd].conn.get();
             }
-            if(conn) {
+            if (conn) {
                 this->closeConn(conn);
             }
         });
@@ -650,18 +702,30 @@ void Server::onRead(http::Conn* client) {
     assert(client);
     int fd = client->GetFd();
     if (fd <= 0) {
+        /*
+         * 在程序快关闭的时候会触发几次
+         * 应该是 client 析构了，导致GetFd()获得的是随机值
+         */
         LOG_W("Invalid fd {}!", fd);
         return;
     }
     {
         std::shared_lock locker(_connMutex);
         if (_users.count(fd) == 0) {
+            /*
+                ```Fd 1818203712 not found in _users map!```
+                closeConn(client) 已从 _users 中删除条目
+                但 onRead 仍在处理该连接的事件（如延迟触发的 EPOLLIN）
+                算不上错误，因为 onRead 是在线程池里异步执行的
+                程序快关闭的时候易触发，应该是因为 client 析构导致获得的 fd 随机
+            */
             LOG_W("Fd {} not found in _users map!", fd);
             return;
         }
-        if (uint64_t connId = client->GetConnId(); _users.at(fd).connId != connId) {
+        if (uint64_t connId = client->GetConnId();
+            _users.at(fd).connId != connId) {
             LOG_W("Fd {} has mismatched connId (expected {}, got {}).", fd,
-                _users.at(fd).connId, connId);
+                  _users.at(fd).connId, connId);
             return;
         }
     }
@@ -670,6 +734,8 @@ void Server::onRead(http::Conn* client) {
     ret = client->Read(&readErrno);
     if (ret <= 0 && readErrno != EAGAIN) { // 读取出错或连接关闭
         closeConn(client);
+        LOG_W("Failed to read from fd {}! readErrno: {}. {}", fd, readErrno,
+              strerror(errno));
         return;
     }
     if (ret > 0) { // 只有当确实读取到数据时才处理请求
@@ -691,19 +757,20 @@ void Server::onProcess(http::Conn* client) {
     }
     {
         std::shared_lock locker(_connMutex);
-        if (uint64_t connId = client->GetConnId(); _users.at(fd).connId != connId) {
-            LOG_W("Fd {} has mismatched connId (expected {}, got {}).",
-            fd, _users.at(fd).connId, connId);
+        if (uint64_t connId = client->GetConnId();
+            _users.at(fd).connId != connId) {
+            LOG_W("Fd {} has mismatched connId (expected {}, got {}).", fd,
+                  _users.at(fd).connId, connId);
             return;
         }
     }
     if (client->Process()) {
         if (!_epoller->ModFd(fd, _connEvent | EPOLLOUT)) {
-            LOG_E("Failed to mod fd {}!", fd);
+            LOG_E("Failed to mod fd {}! {}", fd, strerror(errno));
         }
     } else {
         if (!_epoller->ModFd(fd, _connEvent | EPOLLIN)) { // ?
-            LOG_E("Failed to mod fd {}!", fd);
+            LOG_E("Failed to mod fd {}! {}", fd, strerror(errno));
         }
     }
 }
@@ -719,8 +786,8 @@ void Server::onWrite(http::Conn* client) {
     {
         std::shared_lock locker(_connMutex);
         if (_users.at(fd).connId != connId) {
-            LOG_W("{}: fd {} has mismatched connId (expected {}, got {})",
-                  __FUNCTION__, fd, _users.at(fd).connId, connId);
+            LOG_W("Fd {} has mismatched connId (expected {}, got {})", fd,
+                  _users.at(fd).connId, connId);
             return;
         }
     }
@@ -875,7 +942,7 @@ ServerGuard::ServerGuard(v0::Server* srv, const bool useSignals)
         SetupSignalHandlers();
     }
     _thread = std::thread([this] {
-        _srv->Start();
+        _srv->Run();
         std::unique_lock<std::mutex> lock(_mutex);
         _cv.wait(lock, [this] { return _shouldExit.load(); });
     });

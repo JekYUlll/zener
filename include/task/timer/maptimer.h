@@ -69,12 +69,16 @@ class TimerManager final : public ITimerManager {
 
     // 基于业务ID取消定时器
     void CancelByKey(uint64_t key);
+    /*
+     * 思考：
+     * 如果设置repeat，是否可以不用每次检查完添加新的计时任务？
+     */
 
-    // 使用业务ID调度定时器 TODO key 改为 uint64_t
+    // 使用业务ID调度定时器
     template <typename F, typename... Args>
     void ScheduleWithKey(uint64_t key, int milliseconds, int repeat, F&& f,
                          Args&&... args) {
-        CancelByKey(key); // 先取消该key关联的旧定时器 TODO 有必要吗？
+        CancelByKey(key); // 先取消该key关联的旧定时器
         auto callback = [this, key, func = std::forward<F>(f),
                          tup = std::make_tuple(std::forward<Args>(args)...)]() {
             // 执行回调前先检查key是否仍然有效

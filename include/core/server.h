@@ -16,8 +16,8 @@
 #include <csignal>
 #include <cstdint>
 #include <memory>
-#include <shared_mutex>
 #include <netinet/in.h>
+#include <shared_mutex>
 #include <thread>
 #include <unordered_map>
 
@@ -38,11 +38,13 @@ class Server {
 
     ~Server();
 
-    void Start();
+    void Run();
     void Stop();
     void Shutdown(int timeoutMS = 5000); // 优雅退出
 
-    [[nodiscard]] bool IsClosed() const { return _isClose; }
+    [[nodiscard]] bool IsClosed() const {
+        return _isClose.load(std::memory_order_relaxed);
+    }
 
   private:
     /*
@@ -95,9 +97,9 @@ class Server {
     void dealWrite(http::Conn* client);
 
     static void sendError(int fd, const char* info);
-    void extentTime(const http::Conn* client); // 刷新连接的超时时间
+    void extentTime(http::Conn* client); // 刷新连接的超时时间
 
-    void closeConn(const http::Conn* client); // 正常工作线程中的关闭逻辑
+    void closeConn(http::Conn* client); // 正常工作线程中的关闭逻辑
     void closeConnAsync(int fd, const std::function<void()>& callback =
                                     nullptr); // 异步关闭连接（非阻塞）
     void _closeConnInternal(
@@ -111,7 +113,8 @@ class Server {
     static constexpr int MAX_FD = 65536;
     static constexpr int MAX_EVENTS = 1024; // TODO unused
 
-    [[nodiscard]] static bool checkServerNotFull(int fd); // 检查服务器是否已满，满了返回 false
+    [[nodiscard]] static bool
+    checkServerNotFull(int fd); // 检查服务器是否已满，满了返回 false
 
     static int setFdNonblock(int fd);
     /*
@@ -126,6 +129,7 @@ class Server {
     int _timeoutMS; // @
     std::atomic<bool>
         _isClose; // @改为原子 reactor主线程为单线程，但可能会使用safeguard
+
     int _listenFd{};
     std::string _cwd{};       // 工作目录
     std::string _staticDir{}; // 静态资源目录
@@ -139,10 +143,10 @@ class Server {
     /*
         旧版本: mutable std::unordered_map<int, http::Conn> _users;
         新版本: 使用ConnInfo结构体存储连接信息
-        文件描述符 (fd)
+        <fd, ConnInfo>
        在连接关闭后可能被新连接重用，导致日志、监控或调试时无法区分不同连接
     */
-    std::unordered_map<int, ConnInfo> _users;
+    std::unordered_map<int, ConnInfo> _users; // 已经全部加锁
     /*
         用于生成唯一连接ID的原子计数器 --是否没必要？reactor里server是单线程的
         若其他线程（如工作线程池）可能创建连接，需保留原子操作

@@ -18,6 +18,12 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
+# 禁用高级指令集优化 | 临时设置，为了兼容 valgrind
+set(CMAKE_CXX_FLAGS "-march=x86-64 -mtune=generic -O2")
+
+# 禁用所有 SIMD 优化
+set(CMAKE_CXX_FLAGS "-mno-avx -mno-avx2 -mno-sse4.1 -mno-sse4.2 -march=x86-64 -mtune=generic")
+
 # 构建类型优化 - 强制设置为Release，除非明确指定其他类型
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)

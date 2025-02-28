@@ -48,13 +48,13 @@ class Conn {
     [[nodiscard]] bool Process();
 
     // 需要写出的字节数
-    _ZENER_SHORT_FUNC int ToWriteBytes() const {
+    _ZENER_SHORT_FUNC size_t ToWriteBytes() const {
         return _iov[0].iov_len + _iov[1].iov_len;
     }
 
     _ZENER_SHORT_FUNC int GetFd() const { return _fd; }
 
-    _ZENER_SHORT_FUNC int GetPort() const { return _addr.sin_port; }
+    _ZENER_SHORT_FUNC uint16_t GetPort() const { return _addr.sin_port; }
 
     _ZENER_SHORT_FUNC const char* GetIP() const {
         return inet_ntoa(_addr.sin_addr);
@@ -73,10 +73,10 @@ class Conn {
   private:
     int _fd;
     struct sockaddr_in _addr{};
-    uint64_t _connId{0}; // 连接唯一标识符 0为非法值 // TODO 傻逼cursor重复加flag
+    uint64_t _connId{0}; // 连接唯一标识符 0为非法值 // TODO 需要把外层 ConnInfo 的设置进来
     bool _isClose{};
 
-    int _iovCnt{};
+    int _iovCnt{}; // TODO 检查赋值，是否用到？
     struct iovec _iov[2]{};
 
     Buffer _readBuff;  // 读缓冲区

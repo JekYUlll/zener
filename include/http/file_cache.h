@@ -30,6 +30,9 @@ struct CachedFile {
 
 class FileCache {
   public:
+    FileCache(const FileCache&) = delete;
+    FileCache& operator=(const FileCache&) = delete;
+
     static FileCache& GetInstance() {
         static FileCache instance;
         return instance;
@@ -60,19 +63,16 @@ class FileCache {
     FileCache() = default;
     ~FileCache();
 
-    FileCache(const FileCache&) = delete;
-    FileCache& operator=(const FileCache&) = delete;
-
     // 加载文件并创建映射
-    CachedFile* LoadFile(const std::string& filePath,
-                         const struct stat& fileStat);
+    static CachedFile* LoadFile(const std::string& filePath,
+                                const struct stat& fileStat);
 
     // 卸载文件映射
-    void UnloadFile(CachedFile* file);
+    static void UnloadFile(const CachedFile* file);
 
   private:
-    std::unordered_map<std::string, CachedFile*> _fileCache;
-    std::shared_mutex _cacheMutex; // 读写锁，允许并发读取
+    std::unordered_map<std::string, CachedFile*> _fileCache{};
+    std::shared_mutex _cacheMutex{}; // 读写锁，允许并发读取
     std::atomic<int> _totalMappedFiles{0};
 };
 
