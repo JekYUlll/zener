@@ -40,6 +40,8 @@ MYSQL* SqlConnector::GetConn() {
     MYSQL* sql = nullptr;
     {
         std::unique_lock locker(_mtx);
+        // 如果没连接 MYSQL，会触发 busy ，信号退出：
+        // Process finished with exit code 139 (interrupted by signal 11:SIGSEGV)
         if (_connQue.empty()) {
             LOG_W("SQL connect pool busy!");
         } else {

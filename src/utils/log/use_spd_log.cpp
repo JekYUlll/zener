@@ -51,7 +51,7 @@ void Logger::Init() {
         _sInitialized.store(true, std::memory_order_release);
 
         if (sSpdLogger) {
-            sSpdLogger->info("New Session Start =========================>");
+            sSpdLogger->info("New Session Start.");
         }
     } catch (const spdlog::spdlog_ex& ex) {
         std::cerr << "Logger initialization failed: " << ex.what() << std::endl;
@@ -141,13 +141,10 @@ bool Logger::WriteToFile(const std::string_view logDir,
             // 如果替换失败，继续使用旧的日志器
             return false;
         }
-
         if (fileExists) {
-            sSpdLogger->info("====================Append to existing "
-                             "log====================");
+            sSpdLogger->info("Append to existing log.");
         }
-
-        sSpdLogger->info("Log file created/opened: {}", _logFileName);
+        sSpdLogger->info("Log file: {}", _logFileName);
         return true;
     } catch (const spdlog::spdlog_ex& ex) {
         std::cerr << "Failed to create log file: " << ex.what() << std::endl;

@@ -165,7 +165,7 @@ void Response::UnmapFile() {
                 LOG_E("Exception when releasing file mapping: {}, file={}",
                       e.what(), _cachedFilePath);
             }
-        } else {
+        } else { // TODO 此处似乎也会导致退出
             LOG_W("Trying to release invalid file mapping, address={:p}",
                   static_cast<void *>(_file));
         }

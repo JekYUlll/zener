@@ -1,7 +1,7 @@
 #ifndef ZENER_SERVER_H
 #define ZENER_SERVER_H
 /*
-    添加 /health 端点响应 200 OK，供负载均衡器检测
+    TODO 添加 /health 端点响应 200 OK，供负载均衡器检测
     示例：
     cpp
     server.AddRoute("/health", [](const Request& req, Response& res) {
@@ -42,7 +42,7 @@ class Server {
     void Stop();
     void Shutdown(int timeoutMS = 5000); // 优雅退出
 
-    [[nodiscard]] bool IsClosed() const {
+    _ZENER_SHORT_FUNC bool IsClosed() const {
         return _isClose.load(std::memory_order_relaxed);
     }
 
@@ -107,9 +107,21 @@ class Server {
                                     // 逻辑解耦）但实际上原本实现里没用上
 
     void onRead(http::Conn* client);
+    void handleReadError(http::Conn* client, int err);
     void onWrite(http::Conn* client);
     void onProcess(http::Conn* client);
 
+    /// @intro 校验 conn 的 fd 和 connId 的一致性
+    /// @thread 安全
+    ///1. 检查 fd 范围合法性
+    ///2. 检查 client 是否已经关闭 IsClosed()
+    ///3. 检查 fd 是否在 _users 表中
+    ///4. 检查 connID 与表中对应是否一致
+    [[nodiscard]] bool checkFdAndMatchId(const http::Conn* client) const;
+
+    /*
+     * linux默认最大文件符号大小为 1024，但可以调整
+     */
     static constexpr int MAX_FD = 65536;
     static constexpr int MAX_EVENTS = 1024; // TODO unused
 
@@ -127,8 +139,8 @@ class Server {
     int _port; // 服务器监听的端口
     bool _openLinger;
     int _timeoutMS; // @
-    std::atomic<bool>
-        _isClose; // @改为原子 reactor主线程为单线程，但可能会使用safeguard
+    // @改为原子. reactor主线程为单线程，但可能会使用safeguard
+    std::atomic<bool> _isClose;
 
     int _listenFd{};
     std::string _cwd{};       // 工作目录
@@ -157,7 +169,7 @@ class Server {
         通过 eventfd 创建，用于唤醒。防止退出的时候阻塞在 epoll_wait
      */
     int _wakeupFd{};
-    std::shared_mutex _connMutex; // TODO 换成读写锁
+    mutable std::shared_mutex _connMutex;
 };
 
 } // namespace v0
@@ -185,69 +197,12 @@ class ServerGuard {
     std::thread _thread;
     bool _useSignals;
     std::atomic<bool> _shouldExit{false};
-    std::mutex _mutex;
+    mutable std::mutex _mutex;
     std::condition_variable _cv;
 
     inline static ServerGuard* _instance = nullptr;
 };
 
 } // namespace zener
-
-// class Server : public IRestful {
-//   public:
-//     Server(const int& port, const db::Database* db);
-//     ~Server();
-
-//     std::unique_ptr<Server> Default();
-
-//     void ListenAndServe(const std::string& address = ":8080");
-
-//     void Start();
-//     void Spin();
-//     void Stop();
-//     void Shutdown();
-
-//     void GET(const std::string& router, Handler h) override;
-//     void POST(const std::string& router, Handler h) override;
-//     void PUT(const std::string& router, Handler h) override;
-//     void HEAD(const std::string& router, Handler h) override;
-
-//     void Handle();
-//     void Any();
-
-//   private:
-//     int _port;
-//     std::shared_ptr<db::Database> _db;
-//     // std::unique_ptr<ThreadPool> m_threadPool;
-//     // std::unique_ptr<EventLoop> m_loop;
-// };
-
-// 类似Go的 http.FileServer
-// server.ServerStatic("/static", "./public");
-// 可定制缓存策略
-// server.ServeStatic("/assets", "./dist", {
-//     .max_age = 3600, // 缓存 1 小时
-//     .enable_etag = true // 启用 ETag 验证
-// });
-
-// 链式配置 Builder 模式
-// server.Config()
-//     .SetThreadPoolSize(4)    // 线程池
-//     .SetTimeout(5000)        // 超时时间(ms)
-//     .EnableCompression()     // 启用gzip压缩
-//     .SetLogger(MyLogger);    // 自定义日志
-
-// 扩展接口（Hooks）
-// 生命周期钩子
-// server.OnStartup([]() {
-//     LOG_INFO << "Server starting...";
-// });
-
-// server.OnShutdown([]() {
-//     LOG_INFO << "Server shutting down...";
-// });
-
-// // 自定义协议支持
-// server.AddProtocolHandler("websocket", WebSocketHandler);
 
 #endif // !ZENER_SERVER_H

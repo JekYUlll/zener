@@ -3,6 +3,7 @@
 #include <cassert>
 #include <sys/epoll.h>
 #include <unistd.h>
+#include <utils/log/logger.h>
 /*
 epoll_create
 epoll_ctl
@@ -42,10 +43,16 @@ bool Epoller::ModFd(const int fd, const uint32_t events) const {
 bool Epoller::DelFd(const int fd) const {
     assert(fd >= 0);
     if (fd < 0) {
+        LOG_W("Deleting invalid fd:{} from epoll!", fd);
         return false;
     }
     epoll_event ev = {};
-    return 0 == epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, &ev);
+    // TODO 返回值处理
+    if(const int ret = epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, &ev); ret == 0) {
+        return true;
+    }
+    LOG_W("Error deleting fd:{} from epoll! {}", fd, strerror(errno));
+    return false;
 }
 
 int Epoller::Wait(const int timeoutMs) {

@@ -38,7 +38,7 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
 
     Logger::Init();
 
-    char cwdBuff[256];
+    char cwdBuff[256];           // 程序所在路径
     if (!getcwd(cwdBuff, 256)) { // 接受两个参数：缓冲区 char *buf 和 缓冲区大小
         LOG_E("Failed to get current working directory : {}", strerror(errno));
     }
@@ -69,32 +69,32 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
         LOG_E("Failed to create log file in directory: {}!", fullLogDir);
         return;
     }
-    LOG_I("Server Init ===========================>");
+    LOG_T("-------------------------------------+--");
     LOG_I(" __________ _   _ _____ ____");
     LOG_I("|__  / ____| \\ | | ____|  _ \\");
     LOG_I("  / /|  _| |  \\| |  _| | |_) |");
     LOG_I(" / /_| |___| |\\  | |___|  _ <");
     LOG_I("/____|_____|_| \\_|_____|_| \\_\\");
+    LOG_T("-------------------------------------+--");
     LOG_I("| port: {}, OpenLinger: {}", port, optLinger ? "true" : "false");
     LOG_I("| Listen Mode: {}, OpenConn Mode: {}",
           (_listenEvent & EPOLLET ? "ET" : "LT"),
           (_connEvent & EPOLLET ? "ET" : "LT"));
-    LOG_I("| Log level: {}", logLevel);
     LOG_I("| static path: {}", http::Conn::staticDir);
     LOG_I("| SqlConnPool num: {}, ThreadPool num: {}", connPoolNum, threadNum);
     LOG_I("| TimerManager: {}", TIMER_MANAGER_TYPE);
+    LOG_T("-------------------------------------+--");
 }
 
 Server::~Server() {
     close(_listenFd);
     _isClose.store(true, std::memory_order_release);
     db::SqlConnector::GetInstance().Close();
-    LOG_I("=====================Server exited=====================");
+    LOG_I("Server exited.");
     Logger::Flush();
     Logger::Shutdown();
 }
 
-// TODO 我在 Epoller 里也设置了 trigMode 的设置与检查
 ///@thread 安全
 void Server::initEventMode(const int trigMode) {
     _listenEvent = EPOLLRDHUP;
@@ -122,13 +122,6 @@ void Server::initEventMode(const int trigMode) {
 
 ///@thread 单线程
 void Server::Run() {
-    /*
-     * TODO 加读锁
-     * 设计失误：如何对 _users 加锁？WebServer 里用的 users map，但无需加锁
-     * 多个线程都会访问 _users
-     * ，主循环中也会访问。如果对主循环加锁，会导致很多线程阻塞
-     * 合理的设计是：只在主循环中访问 _users
-     */
     std::shared_lock readLocker(_connMutex, std::defer_lock);
     int timeMS = -1; // epoll wait timeout 默认不超时，一直阻塞，直到有事件发生
     while (!_isClose.load(std::memory_order_acquire)) {
@@ -142,11 +135,11 @@ void Server::Run() {
         for (int i = 0; i < eventCnt; i++) { // 处理事件
             const int fd = _epoller->GetEventFd(i);
             const uint32_t events = _epoller->GetEvents(i);
-            if (fd <= 0) {
+            if (fd <= 0 || fd > MAX_FD) {
                 LOG_W("Invalid fd: {} from epoll!", fd);
                 continue;
             }
-            if (fd == _listenFd) {
+            if (fd == _listenFd) { // @Listen
                 dealListen();
             } else if (events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
                 /*
@@ -171,12 +164,13 @@ void Server::Run() {
                 assert(conn);
                 if (conn) {
                     dealRead(conn);
-                } else {                        /* 和原版不一样的处理：
-                                                   若 fd 已被关闭或未注册到 _users，但 epoll 仍在监听，
-                                                   可能因内核事件队列未清空导致事件重复触发
-                                                   这几行可以加到 dealWrite
-                                                   等函数内部，但还是在这更清晰 -- 单一职责原则
-                                                */
+                } else {
+                    /* 和原版不一样的处理：
+                       若 fd 已被关闭或未注册到 _users，但 epoll 仍在监听，
+                       可能因内核事件队列未清空导致事件重复触发
+                       这几行可以加到 dealWrite
+                       等函数内部，但还是在这更清晰 -- 单一职责原则
+                    */
                     if (!_epoller->DelFd(fd)) { // 从epoll中删除并关闭
                         LOG_W("Invalid fd: {} from epoll!", fd);
                     }
@@ -216,86 +210,6 @@ void Server::Stop() {
     Logger::Shutdown();
 }
 
-void Server::Shutdown(const int timeoutMS) {
-    LOG_I("Shutdown initiated ==========================>");
-    // -------------------- Phase 1: 准备关闭 --------------------
-    _isClose.store(
-        true,
-        std::memory_order_release); // TODO 关闭后Start不再循环，不进行新的读写
-    TimerManagerImpl::GetInstance().Stop();
-    // 双重唤醒机制确保 epoll_wait 退出
-    constexpr uint64_t wakeValue = 1;
-    if (write(_wakeupFd, &wakeValue, sizeof(wakeValue)) == -1) {
-        LOG_E("Failed to write wakeup fd: {}", strerror(errno));
-    }
-    // -------------------- Phase 2: 关闭监听 socket --------------------
-    if (close(_listenFd) != 0) {
-        LOG_E("Close listen fd {0} : {1}", _listenFd, strerror(errno));
-        _listenFd = -1;
-    }
-    const auto shutdownStart = std::chrono::steady_clock::now();
-    std::vector<std::pair<int, ConnInfo>> fdsToClose;
-    { // -------------------- Phase 3: 关闭现有连接 --------------------
-        std::unique_lock locker(_connMutex);
-        if (!_users.empty()) {
-            LOG_I("Closing {} active connections...", _users.size());
-            fdsToClose.reserve(_users.size());
-            for (auto& [fd, conn] : _users) {
-                if (fd > 0) {
-                    fdsToClose.emplace_back(
-                        std::piecewise_construct,  // 显式构造 pair<int,
-                                                   // ConnInfo>，强制右值引用
-                        std::forward_as_tuple(fd), // 隐式转换 const int → int
-                        std::forward_as_tuple(
-                            std::move(conn)) // 强制触发移动构造
-                    );
-                }
-            }
-            _users.clear(); // TODO 好像不太合适
-        }
-    }
-    /*
-        异步关闭所有连接（避免阻塞主线程）
-        此处 remaining 如果是局部变量，若 closeConnAsync
-       是异步操作（如提交到线程池） 需确保回调执行时 remaining 未被销毁
-    */
-    auto remaining = std::make_shared<std::atomic<size_t>>(fdsToClose.size());
-    for (auto& [fd, conn] : fdsToClose) {
-        closeConnAsync(fd, [remaining] { remaining->fetch_sub(1); });
-    }
-    // 等待连接关闭或超时
-    while (remaining->load(std::memory_order_acquire) > 0) {
-        constexpr int CHECK_INTERVAL_MS = 50;
-        const auto elapsed =
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - shutdownStart)
-                .count();
-        if (timeoutMS > 0 && elapsed >= timeoutMS) { // 超时
-            LOG_W("Connection close timeout ({}ms), {} connections remaining.",
-                  timeoutMS, remaining->load());
-            break;
-        }
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(CHECK_INTERVAL_MS));
-    }
-    // -------------------- Phase 4: 关闭线程池 --------------------
-    if (_threadpool) {
-        const int poolTimeout = std::max(100, timeoutMS / 2); // 至少 100ms
-        _threadpool->Shutdown(poolTimeout);
-    }
-    { // -------------------- Phase 5: 清理残留资源 --------------------
-        std::unique_lock locker(_connMutex);
-        _users.clear();
-    }
-    try { // 关闭数据库连接
-        db::SqlConnector::GetInstance().Close();
-    } catch (const std::exception& e) {
-        LOG_E("Database shutdown error: {}", e.what());
-    }
-    LOG_I("Shutdown completed >>>>>>>>>>>>>>>>>>>>>>>>");
-    Logger::Flush();
-}
-
 ///@thread 安全
 void Server::sendError(int fd, const char* info) {
     assert(fd > 0);
@@ -309,19 +223,19 @@ void Server::sendError(int fd, const char* info) {
 ///@param client 调用的时候使用 connInfo.conn.get() 传入
 ///@notice 在release下不进行 client 的空指针判断，需要在调用的时候在外面判空
 ///@important 内部有锁
-///@todo 能否检测重复关闭？对 client 的操作是否线程安全？
+///@todo 能否检测重复关闭？
 ///@thread 安全
 void Server::closeConn(http::Conn* client) {
     assert(client);
     if (!client) {
-        LOG_D("Client is null!");
+        LOG_W("Client is null!");
         return;
     }
     std::unique_lock writeLocker(_connMutex, std::defer_lock);
-    int fd = client->GetFd();
+    int fd = client->GetFd(); // TODO 如果 client 已经析构，此处是否危险？
     assert(fd > 0);
     uint64_t connId = client->GetConnId();
-    if (fd <= 0) {
+    if (fd <= 0 || fd > MAX_FD || connId == 0) {
         LOG_W("Closing invalid fd: {}, connId: {}! remove from _users.", fd,
               connId);
         writeLocker.lock();
@@ -331,7 +245,7 @@ void Server::closeConn(http::Conn* client) {
     }
     if constexpr (false) {
         /*
-         * 删除定时器里预订的超时关闭操作，因为此函数会在此刻提前删除？
+         * TODO 删除定时器里预订的超时关闭操作，因为此函数会在此刻提前删除？
          * 实际上似乎脱裤子放屁，因为定时器里注册的本来就是此函数
          * 注册之后在本函数里又给 Cancel
          * 掉了，导致计时器一直是空的？所以连接占满，超时关闭失效？
@@ -356,17 +270,38 @@ void Server::closeConn(http::Conn* client) {
     if (const auto it = _users.find(fd); it != _users.end()) {
         it->second.active.store(false, std::memory_order_release);
         it->second.connId = 0;
-        // close(fd); // TODO 是否需要？ 原方案里没有close
+        /*
+         *是否需要？ 原方案里没有close
+         *如果此处close ，25万请求中会有100左右失败
+         */
+        if constexpr (false) {
+            close(fd);
+        }
         _users.erase(fd);
     }
     writeLocker.unlock();
-    // TODO !!!!! ERROR 严重
-    // if(client) { // TODO 之前竟然一直忘了调用 Close() --> 调用之后反而宕机 不是段错误，而是信号
-    //     client->Close();
-    // }
+    /*
+       *  TODO ERROR 严重 CLOSE问题
+       *  之前竟然一直忘了调用 Close() --> 调用之后反而宕机 不是段错误，而是信号
+          此处调用 client->Close() 之后连接反而不会退出，导致迅速占满，程序退出
+          -- 添加了 Conn 析构函数里对 Close 的判断，发现果然都是在析构函数里退出
+              而不是在定时器里设置的超时任务里。可能是计时器实现有误
+              也可能是 move 或者 传递智能指针的裸指针，导致 conn
+       提前析构，而裸指针还存在 加上 IsClosed() 检查，出现严重的[server.cpp:470
+       ] - Duplicate fd 2515 detected! 2025/03/01
+          把触发的地方，将重复的fd从_users里erase掉，报错解决。
+          但是每次bench会有几个请求失败，怀疑占用的性能也更高。最后users
+       count会减成负数
+      */
+    if (client) {
+        if (!client->IsClosed()) {
+            client->Close();
+        }
+    }
 }
 
-///@intro 没必要传入fd，传入 conn 就够了
+///@intro 弃用
+///@change 没必要传入fd，传入 conn 就够了
 ///@praram 右值的conn
 ///@thread 安全
 void Server::_closeConnInternal(http::Conn&& client) const {
@@ -395,6 +330,7 @@ void Server::_closeConnInternal(http::Conn&& client) const {
 }
 
 ///@thread 安全
+///@intro 弃用
 void Server::closeConnAsync(int fd, const std::function<void()>& callback) {
     ConnInfo connInfoCopy{};
     { // TODO 检查 _users 中的删除流程是否正确
@@ -422,13 +358,15 @@ void Server::closeConnAsync(int fd, const std::function<void()>& callback) {
 ///@thread 安全
 void Server::addClient(int fd, const sockaddr_in& addr) {
     assert(fd > 0);
+    if (fd <= 0) {
+        LOG_E("Invalid fd: {}!", fd);
+        return;
+    }
     std::unique_lock writeLock(_connMutex, std::defer_lock);
-#ifdef __USE_NO_DELAY
-    if (setNoDelay(fd) < 0) { // TODO 对不同作用的socket应该设置不同行为
+    if (setNoDelay(fd) < 0) { // NO_DELAY
         LOG_W("Failed to set TCP_NODELAY for client fd {}: {}", fd,
               strerror(errno));
     }
-#endif // !__USE_NO_DELAY
     uint64_t connId = _nextConnId.fetch_add(
         1, std::memory_order_acquire); // 为新连接生成唯一ID
     try {
@@ -444,15 +382,16 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
             if (!inserted) {
                 /*
                  * TODO ERROR 严重
-                 * TODO 多次触发 未解决 倒是不会宕机
                  * TODO 重新连接仍然被占用，导致无法连接
                  * fd 被快速复用，而旧的连接信息未及时从 _users 中清理干净
                  * deepseek说必须立即关闭 fd！否则会导致 文件描述符泄漏
                  * 测了一下发现并不会
                  * 是否在什么地方忘了从 _users 里 erase？
+                 * 如果在 closeConn 里调用 client->Close，这里就会阻塞触发
                  */
                 LOG_E("Duplicate fd {} detected!", fd);
-                close(fd); // 没啥影响
+                _users.erase(fd); // new
+                close(fd);        // 没啥影响
                 return;
             }
             auto& connInfo = it->second;
@@ -486,7 +425,10 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
     if (_timeoutMS > 0) {
         TimerManagerImpl::GetInstance().ScheduleWithKey(
             fd, _timeoutMS, 0, [this, fd, connId]() {
-                // 检查文件描述符和连接ID都匹配，防止文件描述符重用导致的错误关闭
+                /*
+                 * 检查文件描述符和连接ID都匹配
+                 * 防止文件描述符重用导致的错误关闭
+                 */
                 assert(fd > 0);
                 assert(connId > 0);
                 http::Conn* conn = nullptr;
@@ -498,6 +440,7 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
                     }
                 }
                 if (conn) {
+                    // 包含删除 _users 表中的 fd
                     closeConn(conn);
                 }
             });
@@ -621,6 +564,7 @@ void Server::dealRead(http::Conn* client) {
         return;
     }
     extentTime(client); // TODO 两种计时器处理差异的本质所在
+    // client 是值捕获。引用捕获很容易崩溃
     _threadpool->AddTask([this, client] { onRead(client); });
 }
 
@@ -693,103 +637,109 @@ void Server::extentTime(http::Conn* client) {
                 conn = _users[fd].conn.get();
             }
             if (conn) {
-                this->closeConn(conn);
+                if(conn->IsClosed()) {
+                    this->closeConn(conn);
+                }
             }
         });
 }
 
+///@err 错误处理
+/// 仅打印
+void Server::handleReadError(http::Conn* client, int err) {
+    const int fd = client->GetFd();
+    switch (err) {
+    case ECONNRESET:
+        LOG_W("Connection reset by peer: fd={}", fd);
+        break;
+    case EBADF:
+        LOG_W("Invalid fd={} detected", fd);
+        break;
+    default:
+        LOG_W("Unknown error {} on fd={}", err, fd);
+    }
+    closeConn(client);
+}
+
+///@thread 工作线程在线程池里调用
 void Server::onRead(http::Conn* client) {
     assert(client);
-    int fd = client->GetFd();
-    if (fd <= 0) {
-        /*
-         * 在程序快关闭的时候会触发几次
-         * 应该是 client 析构了，导致GetFd()获得的是随机值
-         */
-        LOG_W("Invalid fd {}!", fd);
+    const int fd = client->GetFd();
+    if (!checkFdAndMatchId(client)) {
+        LOG_W("Not match!");
         return;
     }
-    {
-        std::shared_lock locker(_connMutex);
-        if (_users.count(fd) == 0) {
-            /*
-                ```Fd 1818203712 not found in _users map!```
-                closeConn(client) 已从 _users 中删除条目
-                但 onRead 仍在处理该连接的事件（如延迟触发的 EPOLLIN）
-                算不上错误，因为 onRead 是在线程池里异步执行的
-                程序快关闭的时候易触发，应该是因为 client 析构导致获得的 fd 随机
-            */
-            LOG_W("Fd {} not found in _users map!", fd);
-            return;
-        }
-        if (uint64_t connId = client->GetConnId();
-            _users.at(fd).connId != connId) {
-            LOG_W("Fd {} has mismatched connId (expected {}, got {}).", fd,
-                  _users.at(fd).connId, connId);
-            return;
-        }
-    }
-    ssize_t ret = -1;
     int readErrno = 0;
-    ret = client->Read(&readErrno);
-    if (ret <= 0 && readErrno != EAGAIN) { // 读取出错或连接关闭
+    if (const ssize_t ret = client->Read(&readErrno); ret == 0) {
+        /*
+        经常收到 104 应该是ECONNRESET，即对端重置了连接
+        read返回0表示对端正常关闭连接（发送了FIN），此时应视为正常关闭，而不是错误
+        */
+        LOG_D("Shutdown on fd={}.", fd); // 对端关闭
         closeConn(client);
-        LOG_W("Failed to read from fd {}! readErrno: {}. {}", fd, readErrno,
-              strerror(errno));
+        return;
+    } else if (ret < 0) {
+        /*
+            EWOULDBLOCK 和 EAGAIN 的值一样，本质上是同一个错误
+            非阻塞模式下，数据尚未准备好，需等待下次事件通知
+            原版放在 onProcess 中处理
+            此实现在 client->Read 里也进行了处理，但是没有调整fd。
+            放在handleEagain中具体处理。
+        */
+        if (readErrno == EAGAIN || readErrno == EWOULDBLOCK) {
+            LOG_D("Shutdown on fd={}.", fd);
+            if (!_epoller->ModFd(fd, EPOLLIN)) {
+                LOG_E("Failed to re-arm EPOLLIN on fd={}!", fd);
+                closeConn(client);
+            }
+        }
+        handleReadError(client, readErrno);
         return;
     }
-    if (ret > 0) { // 只有当确实读取到数据时才处理请求
-        onProcess(client);
-    } else {
-        // 如果没有数据，重新注册 EPOLLIN 事件 --原版没有这一步处理
-        if (!_epoller->ModFd(fd, _connEvent | EPOLLIN)) {
-            LOG_E("Failed to mod fd {} for EPOLLIN!", fd);
-        }
-    }
+    // ret > 0 只有当确实读取到数据时才处理请求
+    onProcess(client);
 }
 
+///@thread 工作线程在线程池里调用
 void Server::onProcess(http::Conn* client) {
     assert(client);
-    int fd = client->GetFd();
-    if (fd <= 0) {
-        LOG_W("Invalid fd {}!", fd);
+    if (!checkFdAndMatchId(client)) {
+        LOG_E("Not match id!");
         return;
     }
-    {
-        std::shared_lock locker(_connMutex);
-        if (uint64_t connId = client->GetConnId();
-            _users.at(fd).connId != connId) {
-            LOG_W("Fd {} has mismatched connId (expected {}, got {}).", fd,
-                  _users.at(fd).connId, connId);
-            return;
+    int fd = client->GetFd();
+    switch (auto result = client->Process()) {
+    case http::Conn::ProcessResult::NEED_MORE_DATA:
+        /* 重新注册EPOLLIN */
+        if (!_epoller->ModFd(fd, _connEvent | EPOLLIN)) {
+            LOG_E("Failed to mod fd {}! {}", fd, strerror(errno));
+            closeConn(client);
         }
-    }
-    if (client->Process()) {
+        break;
+    case http::Conn::ProcessResult::OK:
+        /* 处理成功，注册EPOLLOUT等待可写事件*/
         if (!_epoller->ModFd(fd, _connEvent | EPOLLOUT)) {
             LOG_E("Failed to mod fd {}! {}", fd, strerror(errno));
+            closeConn(client);
         }
-    } else {
-        if (!_epoller->ModFd(fd, _connEvent | EPOLLIN)) { // ?
-            LOG_E("Failed to mod fd {}! {}", fd, strerror(errno));
-        }
+        break;
+    case http::Conn::ProcessResult::RETRY_LATER:
+        // TODO
+        break;
+    case http::Conn::ProcessResult::ERROR:
+        LOG_W("Failed to process fd {}! {}", fd, strerror(errno));
+        closeConn(client);
+        break;
     }
 }
 
+///@thread 工作线程在线程池里调用
 void Server::onWrite(http::Conn* client) {
     assert(client);
     int fd = client->GetFd();
-    if (fd <= 0) {
-        LOG_W("{} called with invalid fd {}!", __FUNCTION__, fd);
+    if (!checkFdAndMatchId(client)) {
+        LOG_E("Not match id!");
         return;
-    }
-    uint64_t connId = client->GetConnId();
-    {
-        std::shared_lock locker(_connMutex);
-        if (_users.at(fd).connId != connId) {
-            LOG_W("Fd {} has mismatched connId (expected {}, got {})", fd,
-                  _users.at(fd).connId, connId);
-            return;
-        }
     }
     int ret = -1;
     int writeErrno = 0;
@@ -811,7 +761,8 @@ void Server::onWrite(http::Conn* client) {
             }
             return;
         }
-        LOG_E("Write err: fd:{}, connId:{}, errno:{}.", fd, connId, writeErrno);
+        LOG_E("Write err: fd:{}, connId:{}, errno:{}.", fd, client->GetConnId(),
+              writeErrno);
         closeConn(client);
         return;
     }
@@ -906,10 +857,119 @@ bool Server::initSocket() {
     return true;
 }
 
+bool Server::checkFdAndMatchId(const http::Conn* client) const {
+    int fd = client->GetFd();
+    // 此处断言退出
+    assert(fd > 0);
+    if (fd <= 0 || fd > MAX_FD) {
+        LOG_W("Invalid fd {}!", fd);
+        return false;
+    }
+    if (client->IsClosed()) {
+        LOG_W("Conn closed!");
+        return false;
+    }
+    {
+        std::shared_lock locker(_connMutex);
+        if (_users.count(fd) == 0) {
+            LOG_W("No such fd {} in _users!", fd);
+            return false;
+        }
+        if (uint64_t connId = client->GetConnId();
+            connId == 0 || _users.at(fd).connId != connId) {
+            LOG_W("Fd {} has mismatched connId (expected {}, got {}).", fd,
+                  _users.at(fd).connId, connId);
+            return false;
+        }
+    }
+    return true;
+}
+
+///@intro 弃用
+void Server::Shutdown(const int timeoutMS) {
+    LOG_I("Shutdown initiated ==========================>");
+    // -------------------- Phase 1: 准备关闭 --------------------
+    _isClose.store(
+        true,
+        std::memory_order_release); // TODO 关闭后Start不再循环，不进行新的读写
+    TimerManagerImpl::GetInstance().Stop();
+    // 双重唤醒机制确保 epoll_wait 退出
+    constexpr uint64_t wakeValue = 1;
+    if (write(_wakeupFd, &wakeValue, sizeof(wakeValue)) == -1) {
+        LOG_E("Failed to write wakeup fd: {}", strerror(errno));
+    }
+    // -------------------- Phase 2: 关闭监听 socket --------------------
+    if (close(_listenFd) != 0) {
+        LOG_E("Close listen fd {0} : {1}", _listenFd, strerror(errno));
+        _listenFd = -1;
+    }
+    const auto shutdownStart = std::chrono::steady_clock::now();
+    std::vector<std::pair<int, ConnInfo>> fdsToClose;
+    { // -------------------- Phase 3: 关闭现有连接 --------------------
+        std::unique_lock locker(_connMutex);
+        if (!_users.empty()) {
+            LOG_I("Closing {} active connections...", _users.size());
+            fdsToClose.reserve(_users.size());
+            for (auto& [fd, conn] : _users) {
+                if (fd > 0) {
+                    fdsToClose.emplace_back(
+                        std::piecewise_construct,  // 显式构造 pair<int,
+                                                   // ConnInfo>，强制右值引用
+                        std::forward_as_tuple(fd), // 隐式转换 const int → int
+                        std::forward_as_tuple(
+                            std::move(conn)) // 强制触发移动构造
+                    );
+                }
+            }
+            _users.clear(); // TODO 好像不太合适
+        }
+    }
+    /*
+        异步关闭所有连接（避免阻塞主线程）
+        此处 remaining 如果是局部变量，若 closeConnAsync
+       是异步操作（如提交到线程池） 需确保回调执行时 remaining 未被销毁
+    */
+    auto remaining = std::make_shared<std::atomic<size_t>>(fdsToClose.size());
+    for (auto& [fd, conn] : fdsToClose) {
+        closeConnAsync(fd, [remaining] { remaining->fetch_sub(1); });
+    }
+    // 等待连接关闭或超时
+    while (remaining->load(std::memory_order_acquire) > 0) {
+        constexpr int CHECK_INTERVAL_MS = 50;
+        const auto elapsed =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - shutdownStart)
+                .count();
+        if (timeoutMS > 0 && elapsed >= timeoutMS) { // 超时
+            LOG_W("Connection close timeout ({}ms), {} connections remaining.",
+                  timeoutMS, remaining->load());
+            break;
+        }
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(CHECK_INTERVAL_MS));
+    }
+    // -------------------- Phase 4: 关闭线程池 --------------------
+    if (_threadpool) {
+        const int poolTimeout = std::max(100, timeoutMS / 2); // 至少 100ms
+        _threadpool->Shutdown(poolTimeout);
+    }
+    { // -------------------- Phase 5: 清理残留资源 --------------------
+        std::unique_lock locker(_connMutex);
+        _users.clear();
+    }
+    try { // 关闭数据库连接
+        db::SqlConnector::GetInstance().Close();
+    } catch (const std::exception& e) {
+        LOG_E("Database shutdown error: {}", e.what());
+    }
+    LOG_I("Shutdown completed >>>>>>>>>>>>>>>>>>>>>>>>");
+    Logger::Flush();
+}
+
 } // namespace v0
 
-// TODO 如果没有配置文件，生成一份默认配置文件
 std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath) {
+    // TODO 如果没有配置文件，生成一份默认配置文件
     if (!Config::Init(configPath)) {
         LOG_E("Failed to initialize config from {}!", configPath);
         return nullptr;
@@ -956,7 +1016,7 @@ ServerGuard::~ServerGuard() {
 }
 
 void ServerGuard::Shutdown() {
-    std::lock_guard<std::mutex> lock(_mutex);
+    std::lock_guard lock(_mutex);
     _shouldExit = true;
     _cv.notify_all();
     _srv->Shutdown();

@@ -40,16 +40,15 @@ if(ENABLE_LTO AND(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQU
     check_ipo_supported(RESULT ipo_supported OUTPUT ipo_output)
 
     if(ipo_supported)
-        message(STATUS "IPO/LTO enabled - 将大幅提升性能")
+        message(STATUS "IPO/LTO enabled - 提升性能")
         set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
     else()
         message(STATUS "IPO/LTO not supported: ${ipo_output}")
     endif()
 endif()
 
-add_definitions(-D__USE_SPDLOG) # __USE_SPDLOG 使用 spdlog 而不是自己的 log 实现
-add_definitions(-D__V0) # __V0 代表启用 webserver 11 原本实现
-add_definitions(-D__USE_NO_DELAY) # 创建连接的时候启用 NO_DELAY
+add_definitions(-D__USE_SPDLOG) # 使用 spdlog
+add_definitions(-D__V0) # __V0
 
 include_directories(
     ${PROJECT_SOURCE_DIR}/include
