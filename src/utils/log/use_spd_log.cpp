@@ -51,7 +51,9 @@ void Logger::Init() {
         _sInitialized.store(true, std::memory_order_release);
 
         if (sSpdLogger) {
+#ifndef NO_LOG
             sSpdLogger->info("New Session Start.");
+#endif
         }
     } catch (const spdlog::spdlog_ex& ex) {
         std::cerr << "Logger initialization failed: " << ex.what() << std::endl;
@@ -142,15 +144,19 @@ bool Logger::WriteToFile(const std::string_view logDir,
             return false;
         }
         if (fileExists) {
+#ifndef NO_LOG
             sSpdLogger->info("Append to existing log.");
+#endif
         }
-        sSpdLogger->info("Log file: {}", _logFileName);
+#ifndef NO_LOG
+        sSpdLogger->info(" : {}", _logFileName);
+#endif
         return true;
     } catch (const spdlog::spdlog_ex& ex) {
-        std::cerr << "Failed to create log file: " << ex.what() << std::endl;
+        std::cerr << "✖️Failed to create log file: " << ex.what() << std::endl;
         return false;
     } catch (const std::exception& ex) {
-        std::cerr << "Failed with exception: " << ex.what() << std::endl;
+        std::cerr << "✖️Failed with exception: " << ex.what() << std::endl;
         return false;
     }
 }

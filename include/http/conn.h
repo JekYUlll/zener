@@ -24,13 +24,13 @@ namespace zener::http {
 // 可以修改为指针或者句柄
 
 class Conn {
-public:
+  public:
     // Process 函数返回的状态
     enum class ProcessResult {
-        NEED_MORE_DATA,  // 需要更多数据（继续等待EPOLLIN）
-        RETRY_LATER,     // 写操作需重试（注册EPOLLOUT）
-        OK,              // 处理成功（正常流转）
-        ERROR            // 严重错误（需关闭连接）
+        NEED_MORE_DATA, // 需要更多数据（继续等待EPOLLIN）
+        RETRY_LATER,    // 写操作需重试（注册EPOLLOUT）
+        OK,             // 处理成功（正常流转）
+        ERROR           // 严重错误（需关闭连接）
     };
 
     Conn();
@@ -77,13 +77,19 @@ public:
 
     static bool isET;             // 是否为边缘触发
     static const char* staticDir; // 请求文件对应的根目录
-    static std::atomic<int> userCount; // TODO 感觉这玩意应该放在 Server 里，就不需要用原子了
+    static std::atomic<int>
+        userCount; // TODO 感觉这玩意应该放在 Server 里，就不需要用原子了
 
   private:
     int _fd;
     struct sockaddr_in _addr{};
-    uint64_t _connId{0}; // 连接唯一标识符 0为非法值 // TODO 需要把外层 ConnInfo 的设置进来
-    bool _isClose{}; // 尝试改为原子，但实际上有点破坏 conn 的 "值属性"
+    uint64_t _connId{
+        0}; // 连接唯一标识符 0为非法值 // TODO 需要把外层 ConnInfo 的设置进来
+    /*
+        尝试改为原子，但实际上有点破坏 conn 的 "值属性"
+        不仅代表是否关闭，也代表是否完成 init
+    */
+    bool _isClose{}; //
 
     int _iovCnt{}; // TODO 检查赋值，是否用到？
     struct iovec _iov[2]{};

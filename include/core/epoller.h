@@ -25,9 +25,9 @@ class Epoller {
     // 等待epoll上监听的fd产生事件，超时时间timeout，产生的事件需要使用GetEvents获得
     [[nodiscard]] int Wait(int timeoutMs = -1);
     // 获取产生的事件的来源fd（应在wait之后调用）
-    [[nodiscard]] int GetEventFd(size_t i) const;
+    [[nodiscard]] int GetEventFd(int i) const;
     // 获取产生的事件（应在wait之后调用）
-    [[nodiscard]] uint32_t GetEvents(size_t i) const;
+    [[nodiscard]] uint32_t GetEvents(int i) const;
 
   private:
     bool _isET;                              // 是否开启ET模式

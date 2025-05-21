@@ -14,13 +14,13 @@ port = 3306
 user = "root"
 password = "donotpanic"
 database = "zener_test"
-poolSize = 12           # 数据库连接池的容量
+poolSize = 8           # 数据库连接池的容量
 
-[redis]
-host = "127.0.0.1"
-port = 6379
-password = "root"
-db = 0
+# [redis]
+# host = "127.0.0.1"
+# port = 6379
+# password = "root"
+# db = 0
 
 [thread]
-poolSize = 8 # 线程池的并行数
+poolSize = 6 # 线程池的并行数

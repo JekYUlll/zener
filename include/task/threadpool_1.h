@@ -1,6 +1,8 @@
 #ifndef ZENER_THREADPOOL1_H
 #define ZENER_THREADPOOL1_H
-
+/*
+    改造后的线程池，使用packaged_task，支持返回值任务
+*/
 #include <cassert>
 #include <chrono>
 #include <condition_variable>
@@ -13,8 +15,9 @@
 namespace zener::v0 {
 
 class ThreadPool {
-public:
-    explicit ThreadPool(const size_t threadCount = std::thread::hardware_concurrency() - 2)
+  public:
+    explicit ThreadPool(
+        const size_t threadCount = std::thread::hardware_concurrency() - 2)
         : _pool(std::make_shared<Pool>()) {
         assert(threadCount > 0);
         _pool->threads.reserve(threadCount);
@@ -22,7 +25,8 @@ public:
             _pool->threads.emplace_back([pool = _pool] {
                 std::unique_lock<std::mutex> lock(pool->mtx);
                 while (true) {
-                    if (pool->isClosed) break;
+                    if (pool->isClosed)
+                        break;
                     if (!pool->tasks.empty()) {
                         auto task = std::move(pool->tasks.front());
                         pool->tasks.pop();
@@ -43,8 +47,8 @@ public:
         Shutdown(0); // 强制关闭
     }
 
-    template <typename F>
-    void AddTask(F&& task) { {
+    template <typename F> void AddTask(F&& task) {
+        {
             std::packaged_task<void()> packagedTask(std::forward<F>(task));
             std::lock_guard<std::mutex> lock(_pool->mtx);
             _pool->tasks.emplace(std::move(packagedTask));
@@ -53,7 +57,8 @@ public:
     }
 
     void Shutdown(int timeoutMS = 1000) const {
-        if (!_pool) return;
+        if (!_pool)
+            return;
         LOG_I("ThreadPool: Initiating shutdown (timeout={}ms)...", timeoutMS);
 
         // -------------------- Phase 1: 优雅关闭 --------------------
@@ -63,11 +68,13 @@ public:
             _pool->cond.notify_all();
         }
         // 等待任务完成或超时
-        auto completionFuture = std::async(std::launch::async, [this, timeoutMS] {
+        auto completionFuture = std::async(std::launch::async, [this,
+                                                                timeoutMS] {
             std::unique_lock<std::mutex> lock(_pool->mtx);
-            return _pool->cond.wait_for(lock, std::chrono::milliseconds(timeoutMS), [this] {
-                return _pool->tasks.empty() && _pool->activeThreads == 0;
-            });
+            return _pool->cond.wait_for(
+                lock, std::chrono::milliseconds(timeoutMS), [this] {
+                    return _pool->tasks.empty() && _pool->activeThreads == 0;
+                });
         });
 
         if (completionFuture.get()) {
@@ -86,7 +93,8 @@ public:
             for (auto& thread : _pool->threads) {
                 if (thread.joinable()) {
                     thread.detach();
-                    LOG_D("ThreadPool: Detached thread {}", thread.native_handle());
+                    LOG_D("ThreadPool: Detached thread {}",
+                          thread.native_handle());
                 }
             }
             _pool->threads.clear();
@@ -94,7 +102,7 @@ public:
         LOG_I("ThreadPool: Shutdown complete.");
     }
 
-private:
+  private:
     struct Pool {
         std::vector<std::thread> threads;
         std::mutex mtx;

@@ -6,6 +6,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <thread>
+#include <unordered_set>
 #include <utility>
 
 namespace zener::rbtimer {
@@ -60,7 +61,7 @@ void TimerManager::Update() {
     }
     // 如果收集了过多的定时器，记录警告
     if (processedCount >= 100) {
-        LOG_W("Timer: update too many timers once: {}",processedCount);
+        LOG_W("Timer: update too many timers once: {}", processedCount);
     }
     // 释放锁后再执行回调，避免长时间持有锁
     lock.unlock();
@@ -91,7 +92,7 @@ void TimerManager::Update() {
     }
 }
 
-    // TODO cursor 瞎写的非常诡异低效的函数
+// TODO cursor 瞎写的非常诡异低效的函数
 // 新增：清理已取消的定时器
 void TimerManager::CleanupCancelledTimers() {
     LOG_D("Cleaning cancelled timers...");
@@ -113,8 +114,7 @@ void TimerManager::CleanupCancelledTimers() {
         // 如果清理有效，更新定时器集合
         if (newTimers.size() < _timers.size()) {
             _timers = std::move(newTimers);
-            LOG_I("Cleaned up. {} timers to {}.", countBefore,
-                  _timers.size());
+            LOG_I("Cleaned up. {} timers to {}.", countBefore, _timers.size());
         }
     } catch (const std::exception& e) {
         LOG_E("Clean up canceled timers exception: {}", e.what());
@@ -208,8 +208,7 @@ void TimerManager::DoSchedule(int milliseconds, int repeat,
 
         std::unique_lock lock(_timerMutex);
         _timers.insert(std::make_pair(t._time, t));
-        LOG_D("Timer add schedule. time:{}, repeat:{}.", t._time,
-              repeat);
+        LOG_D("Timer add schedule. time:{}, repeat:{}.", t._time, repeat);
     } catch (const std::exception& e) {
         LOG_E("Timer add schedule exception: {}", e.what());
     }
@@ -253,8 +252,8 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
 
         // TODO 此处的key和id分别是什么
         int id = _nextId++;
-        LOG_D("Set new timer. key:{}, id:{}, timeout:{}, repeat:{}",
-            key, id, milliseconds, repeat);
+        LOG_D("Set new timer. key:{}, id:{}, timeout:{}, repeat:{}", key, id,
+              milliseconds, repeat);
 
         // 保存key到定时器ID的映射
         _keyToTimerId[key] = id;
@@ -289,9 +288,12 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
 
                 // 处理重复执行
                 std::unique_lock<std::shared_mutex> writeLock(_timerMutex);
-                if (const auto keyIt = _keyToTimerId.find(key); keyIt != _keyToTimerId.end() && keyIt->second == id) {
-                    if (const auto it = _repeats.find(id); it != _repeats.end()) {
-                        if (auto& [remaining, period] = it->second; remaining > 0) {
+                if (const auto keyIt = _keyToTimerId.find(key);
+                    keyIt != _keyToTimerId.end() && keyIt->second == id) {
+                    if (const auto it = _repeats.find(id);
+                        it != _repeats.end()) {
+                        if (auto& [remaining, period] = it->second;
+                            remaining > 0) {
                             remaining--;
                             LOG_D("定时器：key={}的定时器id={}"
                                   "执行完成，剩余重复次数={}",
@@ -337,9 +339,9 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
 
                 // 发生异常时，尝试清理资源
                 try {
-                    std::unique_lock cleanupLock(
-                        _timerMutex);
-                    if (const auto keyIt = _keyToTimerId.find(key); keyIt != _keyToTimerId.end() && keyIt->second == id) {
+                    std::unique_lock cleanupLock(_timerMutex);
+                    if (const auto keyIt = _keyToTimerId.find(key);
+                        keyIt != _keyToTimerId.end() && keyIt->second == id) {
                         _keyToTimerId.erase(keyIt);
                     }
                     _repeats.erase(id);
@@ -353,7 +355,8 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
                 try {
                     std::unique_lock<std::shared_mutex> cleanupLock(
                         _timerMutex);
-                    if (const auto keyIt = _keyToTimerId.find(key); keyIt != _keyToTimerId.end() && keyIt->second == id) {
+                    if (const auto keyIt = _keyToTimerId.find(key);
+                        keyIt != _keyToTimerId.end() && keyIt->second == id) {
                         _keyToTimerId.erase(keyIt);
                     }
                     _repeats.erase(id);
@@ -377,7 +380,8 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
         // 清理任何部分创建的资源
         try {
             std::unique_lock<std::shared_mutex> cleanupLock(_timerMutex);
-            if (const auto keyIt = _keyToTimerId.find(key); keyIt != _keyToTimerId.end()) {
+            if (const auto keyIt = _keyToTimerId.find(key);
+                keyIt != _keyToTimerId.end()) {
                 _repeats.erase(keyIt->second);
                 _keyToTimerId.erase(keyIt);
             }
@@ -395,10 +399,12 @@ void TimerManager::CancelByKey(const uint64_t key) {
 
 void TimerManager::CancelByKeyInternal(uint64_t key) {
     try {
-        if (const auto keyIt = _keyToTimerId.find(key); keyIt != _keyToTimerId.end()) {
+        if (const auto keyIt = _keyToTimerId.find(key);
+            keyIt != _keyToTimerId.end()) {
             const int timerId = keyIt->second;
             _keyToTimerId.erase(keyIt);
-            if (const auto repeatIt = _repeats.find(timerId); repeatIt != _repeats.end()) {
+            if (const auto repeatIt = _repeats.find(timerId);
+                repeatIt != _repeats.end()) {
                 _repeats.erase(repeatIt);
             }
             // 注意：由于红黑树实现的限制，我们无法直接删除特定ID的定时器

@@ -21,7 +21,6 @@
 #include <netinet/tcp.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <thread>
 #include <unistd.h>
 
 namespace zener {
@@ -54,8 +53,8 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
         _isClose.store(
             false,
             std::
-                memory_order_release); // TODO
-                                       // 此处应退出，但是没有正常退出，应该直接触发ServerGuard的信号？
+                memory_order_release);
+
         throw std::runtime_error("Failed to initialize listen socket.");
     }
 
@@ -69,20 +68,20 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
         LOG_E("Failed to create log file in directory: {}!", fullLogDir);
         return;
     }
-    LOG_T("-------------------------------------+--");
-    LOG_I(" __________ _   _ _____ ____");
-    LOG_I("|__  / ____| \\ | | ____|  _ \\");
-    LOG_I("  / /|  _| |  \\| |  _| | |_) |");
-    LOG_I(" / /_| |___| |\\  | |___|  _ <");
-    LOG_I("/____|_____|_| \\_|_____|_| \\_\\");
-    LOG_T("-------------------------------------+--");
-    LOG_I("| port: {}, OpenLinger: {}", port, optLinger ? "true" : "false");
-    LOG_I("| Listen Mode: {}, OpenConn Mode: {}",
+    LOG_T("🚀--------------------------------+--");
+    LOG_I("|   __________ _   _ _____ ____");
+    LOG_I("|  |__  / ____| \\ | | ____|  _ \\");
+    LOG_I("|    / /|  _| |  \\| |  _| | |_) |");
+    LOG_I("|   / /_| |___| |\\  | |___|  _ <");
+    LOG_I("|  /____|_____|_| \\_|_____|_| \\_\\");
+    LOG_T("🚀--------------------------------+--");
+    LOG_I("| 󰩟 port: {}, OpenLinger: {}", port, optLinger ? "true" : "false");
+    LOG_I("|  Listen Mode: {}, OpenConn Mode: {}",
           (_listenEvent & EPOLLET ? "ET" : "LT"),
           (_connEvent & EPOLLET ? "ET" : "LT"));
-    LOG_I("| static path: {}", http::Conn::staticDir);
-    LOG_I("| SqlConnPool num: {}, ThreadPool num: {}", connPoolNum, threadNum);
-    LOG_I("| TimerManager: {}", TIMER_MANAGER_TYPE);
+    LOG_I("|  static path: {}", http::Conn::staticDir);
+    LOG_I("| 󰰙 SqlConnPool num: {}, ThreadPool num: {}", connPoolNum, threadNum);
+    LOG_I("| 󰔛 TimerManager: {}", TIMER_MANAGER_TYPE);
     LOG_T("-------------------------------------+--");
 }
 
@@ -232,7 +231,7 @@ void Server::closeConn(http::Conn* client) {
         return;
     }
     std::unique_lock writeLocker(_connMutex, std::defer_lock);
-    int fd = client->GetFd(); // TODO 如果 client 已经析构，此处是否危险？
+    int fd = client->GetFd();
     assert(fd > 0);
     uint64_t connId = client->GetConnId();
     if (fd <= 0 || fd > MAX_FD || connId == 0) {
@@ -277,12 +276,20 @@ void Server::closeConn(http::Conn* client) {
         if constexpr (false) {
             close(fd);
         }
+        /*
+            因为 _users 的值是 ConnInfo 的实例，
+            所以会调用 ConnInfo 的析构函数，析构函数里调用 Close
+            原方案里是不将其从 _users 中删除，而是手动调用 Close
+            下一次 addClient 在此处重新调用 _users[fd].Init()
+            相当于生成一个新的连接
+        */
         _users.erase(fd);
     }
     writeLocker.unlock();
+
     /*
-       *  TODO ERROR 严重 CLOSE问题
-       *  之前竟然一直忘了调用 Close() --> 调用之后反而宕机 不是段错误，而是信号
+        ERROR 严重 CLOSE问题
+       *  之前一直忘了调用 Close() --> 调用之后反而宕机 不是段错误，而是信号
           此处调用 client->Close() 之后连接反而不会退出，导致迅速占满，程序退出
           -- 添加了 Conn 析构函数里对 Close 的判断，发现果然都是在析构函数里退出
               而不是在定时器里设置的超时任务里。可能是计时器实现有误
@@ -292,10 +299,12 @@ void Server::closeConn(http::Conn* client) {
           把触发的地方，将重复的fd从_users里erase掉，报错解决。
           但是每次bench会有几个请求失败，怀疑占用的性能也更高。最后users
        count会减成负数
-      */
-    if (client) {
-        if (!client->IsClosed()) {
-            client->Close();
+    */
+    if constexpr (false) {
+        if (client) {
+            if (!client->IsClosed()) {
+                client->Close();
+            }
         }
     }
 }
@@ -333,7 +342,7 @@ void Server::_closeConnInternal(http::Conn&& client) const {
 ///@intro 弃用
 void Server::closeConnAsync(int fd, const std::function<void()>& callback) {
     ConnInfo connInfoCopy{};
-    { // TODO 检查 _users 中的删除流程是否正确
+    {
         std::unique_lock locker(_connMutex);
         const auto it = _users.find(fd);
         if (it == _users.end()) {
@@ -637,7 +646,7 @@ void Server::extentTime(http::Conn* client) {
                 conn = _users[fd].conn.get();
             }
             if (conn) {
-                if(conn->IsClosed()) {
+                if (conn->IsClosed()) {
                     this->closeConn(conn);
                 }
             }
@@ -859,7 +868,6 @@ bool Server::initSocket() {
 
 bool Server::checkFdAndMatchId(const http::Conn* client) const {
     int fd = client->GetFd();
-    // 此处断言退出
     assert(fd > 0);
     if (fd <= 0 || fd > MAX_FD) {
         LOG_W("Invalid fd {}!", fd);
@@ -883,87 +891,6 @@ bool Server::checkFdAndMatchId(const http::Conn* client) const {
         }
     }
     return true;
-}
-
-///@intro 弃用
-void Server::Shutdown(const int timeoutMS) {
-    LOG_I("Shutdown initiated ==========================>");
-    // -------------------- Phase 1: 准备关闭 --------------------
-    _isClose.store(
-        true,
-        std::memory_order_release); // TODO 关闭后Start不再循环，不进行新的读写
-    TimerManagerImpl::GetInstance().Stop();
-    // 双重唤醒机制确保 epoll_wait 退出
-    constexpr uint64_t wakeValue = 1;
-    if (write(_wakeupFd, &wakeValue, sizeof(wakeValue)) == -1) {
-        LOG_E("Failed to write wakeup fd: {}", strerror(errno));
-    }
-    // -------------------- Phase 2: 关闭监听 socket --------------------
-    if (close(_listenFd) != 0) {
-        LOG_E("Close listen fd {0} : {1}", _listenFd, strerror(errno));
-        _listenFd = -1;
-    }
-    const auto shutdownStart = std::chrono::steady_clock::now();
-    std::vector<std::pair<int, ConnInfo>> fdsToClose;
-    { // -------------------- Phase 3: 关闭现有连接 --------------------
-        std::unique_lock locker(_connMutex);
-        if (!_users.empty()) {
-            LOG_I("Closing {} active connections...", _users.size());
-            fdsToClose.reserve(_users.size());
-            for (auto& [fd, conn] : _users) {
-                if (fd > 0) {
-                    fdsToClose.emplace_back(
-                        std::piecewise_construct,  // 显式构造 pair<int,
-                                                   // ConnInfo>，强制右值引用
-                        std::forward_as_tuple(fd), // 隐式转换 const int → int
-                        std::forward_as_tuple(
-                            std::move(conn)) // 强制触发移动构造
-                    );
-                }
-            }
-            _users.clear(); // TODO 好像不太合适
-        }
-    }
-    /*
-        异步关闭所有连接（避免阻塞主线程）
-        此处 remaining 如果是局部变量，若 closeConnAsync
-       是异步操作（如提交到线程池） 需确保回调执行时 remaining 未被销毁
-    */
-    auto remaining = std::make_shared<std::atomic<size_t>>(fdsToClose.size());
-    for (auto& [fd, conn] : fdsToClose) {
-        closeConnAsync(fd, [remaining] { remaining->fetch_sub(1); });
-    }
-    // 等待连接关闭或超时
-    while (remaining->load(std::memory_order_acquire) > 0) {
-        constexpr int CHECK_INTERVAL_MS = 50;
-        const auto elapsed =
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - shutdownStart)
-                .count();
-        if (timeoutMS > 0 && elapsed >= timeoutMS) { // 超时
-            LOG_W("Connection close timeout ({}ms), {} connections remaining.",
-                  timeoutMS, remaining->load());
-            break;
-        }
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(CHECK_INTERVAL_MS));
-    }
-    // -------------------- Phase 4: 关闭线程池 --------------------
-    if (_threadpool) {
-        const int poolTimeout = std::max(100, timeoutMS / 2); // 至少 100ms
-        _threadpool->Shutdown(poolTimeout);
-    }
-    { // -------------------- Phase 5: 清理残留资源 --------------------
-        std::unique_lock locker(_connMutex);
-        _users.clear();
-    }
-    try { // 关闭数据库连接
-        db::SqlConnector::GetInstance().Close();
-    } catch (const std::exception& e) {
-        LOG_E("Database shutdown error: {}", e.what());
-    }
-    LOG_I("Shutdown completed >>>>>>>>>>>>>>>>>>>>>>>>");
-    Logger::Flush();
 }
 
 } // namespace v0
@@ -994,49 +921,6 @@ std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath) {
         true);
     assert(server);
     return server;
-}
-
-ServerGuard::ServerGuard(v0::Server* srv, const bool useSignals)
-    : _srv(srv), _useSignals(useSignals) {
-    if (_useSignals) {
-        SetupSignalHandlers();
-    }
-    _thread = std::thread([this] {
-        _srv->Run();
-        std::unique_lock<std::mutex> lock(_mutex);
-        _cv.wait(lock, [this] { return _shouldExit.load(); });
-    });
-}
-
-ServerGuard::~ServerGuard() {
-    Shutdown();
-    if (_thread.joinable()) {
-        _thread.join();
-    }
-}
-
-void ServerGuard::Shutdown() {
-    std::lock_guard lock(_mutex);
-    _shouldExit = true;
-    _cv.notify_all();
-    _srv->Shutdown();
-}
-
-void ServerGuard::SetupSignalHandlers() {
-    struct sigaction sa{};
-    sa.sa_handler = SignalHandler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-    sigaction(SIGINT, &sa, nullptr);
-    sigaction(SIGTERM, &sa, nullptr);
-}
-
-void ServerGuard::SignalHandler(int sig) {
-    constexpr char msg[] = "Signal received\n";
-    write(STDERR_FILENO, msg, sizeof(msg) - 1);
-    if (_instance) {
-        _instance->Shutdown();
-    }
 }
 
 } // namespace zener

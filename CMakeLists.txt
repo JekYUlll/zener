@@ -48,6 +48,7 @@ if(ENABLE_LTO AND(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQU
 endif()
 
 add_definitions(-D__USE_SPDLOG) # 使用 spdlog
+#add_definitions(-DNO_LOG) # 关闭日志
 add_definitions(-D__V0) # __V0
 
 include_directories(

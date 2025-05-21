@@ -122,19 +122,18 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
     // struct iovec 用于进行分散 - 聚集 I/O（Scatter - Gather I/O）操作。
     // 允许程序在一次系统调用中从多个缓冲区读取数据（聚集）或向多个缓冲区写入数据（分散）
     struct iovec iov[2];
-    const size_t writable = WritableBytes();
 
     // 检查 Buffer 是否有可写空间，如果不足则进行适当扩容
-    if (writable < 1024) { // 如果可写空间小于1KB
+    if (const size_t writable = WritableBytes(); writable < 1024) { // 如果可写空间小于1KB
         // 扩容至少4KB空间，但不超过已用空间的两倍
-        size_t newSpace = std::max<size_t>(4096, ReadableBytes());
+        const size_t newSpace = std::max<size_t>(4096, ReadableBytes());
         try {
             EnsureWritable(newSpace);
         } catch (const std::exception& e) {
             if (saveErrno) {
                 *saveErrno = ENOMEM;
             }
-            LOG_E("Buffer::ReadFd - 内存分配失败: {}", e.what());
+            LOG_E("Buffer::ReadFd - failed: {}", e.what());
             return -1;
         }
     }
@@ -160,7 +159,7 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
         // 连接已关闭，不做任何处理
     } else if (static_cast<size_t>(len) <= updatedWritable) {
         // 数据完全写入第一个缓冲区，使用原子操作更新写位置
-        size_t newPos = _writePos.load(std::memory_order_acquire) + len;
+        const size_t newPos = _writePos.load(std::memory_order_acquire) + len;
         _writePos.store(newPos, std::memory_order_release);
     } else {
         // 数据部分写入第一个缓冲区，部分写入第二个缓冲区
@@ -202,7 +201,7 @@ ssize_t Buffer::WriteFd(const int fd, int* saveErrno) {
     }
 
     // 更新读位置，使用原子操作
-    size_t newPos = _readPos.load(std::memory_order_acquire) + len;
+    const size_t newPos = _readPos.load(std::memory_order_acquire) + len;
     _readPos.store(newPos, std::memory_order_release);
 
     return len;

@@ -41,7 +41,7 @@ class ThreadPool {
         ThreadPool* _pool; // 所属线程池
 
       public:
-        ThreadWorker(ThreadPool* pool, const int id) : _pool(pool), _id(id) {}
+        ThreadWorker(ThreadPool* pool, const int id) : _id(id), _pool(pool) {}
 
         void operator()() const {
             std::function<void()> func;

@@ -1,6 +1,5 @@
 #ifndef ZENER_HTTP_REQUEST_H
 #define ZENER_HTTP_REQUEST_H
-
 /*
 POST http://www.baidu.com HTTP/1.1                         \r\n       (请求行)
 Host: api.efxnow.com                                       \r\n (一条请求头)
@@ -9,9 +8,7 @@ Content-Length: length                                     \r\n (一条请求头
                                                            \r\n       (空行)
 UserID=string&PWD=string&OrderConfirmation=string                     (请求体)
 */
-
 // 整个项目最麻烦的地方：字符串解析。直接抄了。
-
 #include "buffer/buffer.h"
 
 #include <string>

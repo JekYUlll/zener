@@ -60,13 +60,13 @@ int Epoller::Wait(const int timeoutMs) {
                       timeoutMs);
 }
 
-int Epoller::GetEventFd(const size_t i) const {
-    assert(i < _events.size() && i >= 0); // i >= 0 永远为 true ?
+int Epoller::GetEventFd(const int i) const {
+    assert(i < _events.size() && i >= 0);
     return _events[i].data.fd;
 }
 
-uint32_t Epoller::GetEvents(const size_t i) const {
-    assert(i < _events.size() && i >= 0); // i >= 0 永远为 true ?
+uint32_t Epoller::GetEvents(const int i) const {
+    assert(i < _events.size() && i >= 0);
     return _events[i].events;
 }
 

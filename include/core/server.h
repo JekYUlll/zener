@@ -24,10 +24,7 @@
 namespace zener {
 namespace v0 {
 
-class ServerGuard;
-
 class Server {
-    friend class ServerGuard;
 
   public:
     Server(int port, int trigMode, int timeoutMS, bool optLinger,
@@ -40,7 +37,6 @@ class Server {
 
     void Run();
     void Stop();
-    void Shutdown(int timeoutMS = 5000); // 优雅退出
 
     _ZENER_SHORT_FUNC bool IsClosed() const {
         return _isClose.load(std::memory_order_relaxed);
@@ -113,10 +109,10 @@ class Server {
 
     /// @intro 校验 conn 的 fd 和 connId 的一致性
     /// @thread 安全
-    ///1. 检查 fd 范围合法性
-    ///2. 检查 client 是否已经关闭 IsClosed()
-    ///3. 检查 fd 是否在 _users 表中
-    ///4. 检查 connID 与表中对应是否一致
+    /// 1. 检查 fd 范围合法性
+    /// 2. 检查 client 是否已经关闭 IsClosed()
+    /// 3. 检查 fd 是否在 _users 表中
+    /// 4. 检查 connID 与表中对应是否一致
     [[nodiscard]] bool checkFdAndMatchId(const http::Conn* client) const;
 
     /*
@@ -175,33 +171,6 @@ class Server {
 } // namespace v0
 
 std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath);
-
-class ServerGuard {
-  public:
-    explicit ServerGuard(v0::Server* srv, bool useSignals = false);
-
-    ~ServerGuard();
-
-    void Shutdown();
-
-    _ZENER_SHORT_FUNC bool ShouldExit() const {
-        return _shouldExit.load(std::memory_order_relaxed);
-    }
-
-  private:
-    static void SetupSignalHandlers();
-
-    static void SignalHandler(int sig);
-
-    v0::Server* _srv;
-    std::thread _thread;
-    bool _useSignals;
-    std::atomic<bool> _shouldExit{false};
-    mutable std::mutex _mutex;
-    std::condition_variable _cv;
-
-    inline static ServerGuard* _instance = nullptr;
-};
 
 } // namespace zener
 

@@ -10,12 +10,11 @@
 #include <map>
 #include <shared_mutex>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
 namespace zener::rbtimer {
 
-    /// 即 TimerNode 节点
+/// 即 TimerNode 节点
 class Timer {
     friend class TimerManager;
 
@@ -69,10 +68,6 @@ class TimerManager final : public ITimerManager {
 
     // 基于业务ID取消定时器
     void CancelByKey(uint64_t key);
-    /*
-     * 思考：
-     * 如果设置repeat，是否可以不用每次检查完添加新的计时任务？
-     */
 
     // 使用业务ID调度定时器
     template <typename F, typename... Args>
@@ -113,13 +108,13 @@ class TimerManager final : public ITimerManager {
     std::unordered_map<int, std::pair<int, int>>
         _repeats{}; // ID -> (repeat count, period)
     // TODO 有必要吗？ 我直接传 connId 当 key. 后面查看这个map作用
-    std::unordered_map<uint64_t, int> _keyToTimerId{}; // 业务ID -> 定时器ID的映射
+    std::unordered_map<uint64_t, int>
+        _keyToTimerId{}; // 业务ID -> 定时器ID的映射
 
     // 线程安全相关
     mutable std::shared_mutex _timerMutex; // 读写锁保护定时器操作
 };
 
 } // namespace zener::rbtimer
-
 
 #endif // !ZENER_MULTIMAP_TIMER_H

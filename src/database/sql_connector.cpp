@@ -20,17 +20,17 @@ void SqlConnector::Init(const char* host, const unsigned int port,
         MYSQL* sql = nullptr;
         sql = mysql_init(sql);
         if (!sql) {
-            LOG_E("MYSQL[{}] init error!", i);
+            LOG_E("󰴀 MYSQL[{}] init error!", i);
             assert(sql);
             continue;
         }
         sql =
             mysql_real_connect(sql, host, user, pwd, dbName, port, nullptr, 0);
         if (!sql) {
-            LOG_E("MYSQL[{}] connect error!", i);  // TODO 重连
+            LOG_E("󰴀 MYSQL[{}] connect error!", i);  // TODO 重连
             continue;
         }
-        LOG_I("Connected to MYSQL[{}], database: {}.", i, dbName);
+        LOG_I("󰪩 Connected to MYSQL[{}], database: {}.", i, dbName);
         _connQue.push(sql);
     }
     _maxConnSize = size;
@@ -43,7 +43,7 @@ MYSQL* SqlConnector::GetConn() {
         // 如果没连接 MYSQL，会触发 busy ，信号退出：
         // Process finished with exit code 139 (interrupted by signal 11:SIGSEGV)
         if (_connQue.empty()) {
-            LOG_W("SQL connect pool busy!");
+            LOG_W("󱘿 SQL connect pool busy!");
         } else {
             _condition.wait(locker,
                             [this]() { return !this->_connQue.empty(); });
@@ -57,7 +57,7 @@ MYSQL* SqlConnector::GetConn() {
 void SqlConnector::FreeConn(MYSQL* sql) {
     assert(sql);
     {
-        std::lock_guard<std::mutex> locker(_mtx);
+        std::lock_guard locker(_mtx);
         _connQue.push(sql); // 放回连接池
     }
 }
