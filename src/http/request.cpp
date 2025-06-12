@@ -187,7 +187,6 @@ bool Request::userVerify(const std::string& name, const std::string& pwd,
     }
     LOG_I("Verify name:{0} pwd:{1}", name.c_str(), pwd.c_str());
     MYSQL* sql;
-    // 原代码里此处只调用构造函数，未实例化
     db::SqlConnRAII raii(&sql, &db::SqlConnector::GetInstance());
     assert(sql);
 
