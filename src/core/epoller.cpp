@@ -25,6 +25,7 @@ bool Epoller::AddFd(const int fd, const uint32_t events) const {
     epoll_event ev = {};
     ev.data.fd = fd;
     ev.events = events;
+    // FIXME 此处是连接 fd，设置 EPOLLET 代表要循环读取数据
     ev.events = _isET ? EPOLLIN | EPOLLET
                       : EPOLLIN; // 不知是否需要，原代码中没有设置 _isET
     return 0 == epoll_ctl(_epollFd, EPOLL_CTL_ADD, fd, &ev);

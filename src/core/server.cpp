@@ -288,7 +288,7 @@ void Server::closeConn(http::Conn* client) {
     writeLocker.unlock();
 
     /*
-        ERROR 严重 CLOSE问题
+        ERROR 严重 CLOSE 问题
        *  之前一直忘了调用 Close() --> 调用之后反而宕机 不是段错误，而是信号
           此处调用 client->Close() 之后连接反而不会退出，导致迅速占满，程序退出
           -- 添加了 Conn 析构函数里对 Close 的判断，发现果然都是在析构函数里退出
