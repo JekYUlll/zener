@@ -4,7 +4,9 @@
 #include "utils/log/logger.h"
 
 #include <mysql/mysql.h>
-#include <regex>
+// TODO: 替换为boost::regex
+#include <boost/regex.hpp>
+// #include <regex>
 
 namespace zener::http {
 
@@ -32,15 +34,15 @@ bool Request::IsKeepAlive() const {
     return false;
 }
 
-bool Request::parse(Buffer& buff) {
+bool Request::parse(Buffer &buff) {
     constexpr char CRLF[] = "\r\n";
     if (buff.ReadableBytes() <= 0) {
         return false;
     }
     while (buff.ReadableBytes() && _state != FINISH) {
-        const char* lineEnd =
+        const char *lineEnd =
             std::search(buff.Peek(), buff.BeginWrite(), CRLF, CRLF + 2);
-        const char* peek = buff.Peek();
+        const char *peek = buff.Peek();
         std::string line(peek, lineEnd);
         switch (_state) {
         case REQUEST_LINE:
@@ -74,7 +76,7 @@ void Request::parsePath() {
     if (_path == "/") {
         _path = "/index.html";
     } else {
-        for (auto& item : DEFAULT_HTML) {
+        for (auto &item : DEFAULT_HTML) {
             if (item == _path) {
                 _path += ".html";
                 break;
@@ -83,10 +85,10 @@ void Request::parsePath() {
     }
 }
 
-bool Request::parseRequestLine(const std::string& line) {
+bool Request::parseRequestLine(const std::string &line) {
     // 正则
-    const std::regex patten("^([^ ]*) ([^ ]*) HTTP/([^ ]*)$");
-    if (std::smatch subMatch; regex_match(line, subMatch, patten)) {
+    const boost::regex patten("^([^ ]*) ([^ ]*) HTTP/([^ ]*)$");
+    if (boost::smatch subMatch; boost::regex_match(line, subMatch, patten)) {
         _method = subMatch[1];
         _path = subMatch[2];
         _version = subMatch[3];
@@ -97,16 +99,16 @@ bool Request::parseRequestLine(const std::string& line) {
     return false;
 }
 
-void Request::parseHeader(const std::string& line) {
-    const std::regex patten("^([^:]*): ?(.*)$");
-    if (std::smatch subMatch; regex_match(line, subMatch, patten)) {
+void Request::parseHeader(const std::string &line) {
+    const boost::regex patten("^([^:]*): ?(.*)$");
+    if (boost::smatch subMatch; boost::regex_match(line, subMatch, patten)) {
         _header[subMatch[1]] = subMatch[2];
     } else {
         _state = BODY;
     }
 }
 
-void Request::parseBody(const std::string& line) {
+void Request::parseBody(const std::string &line) {
     _body = line;
     parsePost();
     _state = FINISH;
@@ -129,7 +131,8 @@ void Request::parsePost() {
             int tag = DEFAULT_HTML_TAG.find(_path)->second;
             LOG_D("Tag:{}", tag);
             if (tag == 0 || tag == 1) {
-                if (const bool isLogin = (tag == 1); userVerify(_post["username"], _post["password"], isLogin)) {
+                if (const bool isLogin = (tag == 1);
+                    userVerify(_post["username"], _post["password"], isLogin)) {
                     _path = "/welcome.html";
                 } else {
                     _path = "/error.html";
@@ -180,21 +183,21 @@ void Request::parseFromUrlencoded() {
     }
 }
 
-bool Request::userVerify(const std::string& name, const std::string& pwd,
+bool Request::userVerify(const std::string &name, const std::string &pwd,
                          const bool isLogin) {
     if (name.empty() || pwd.empty()) {
         return false;
     }
     LOG_I("Verify name:{0} pwd:{1}", name.c_str(), pwd.c_str());
-    MYSQL* sql;
+    MYSQL *sql;
     db::SqlConnRAII raii(&sql, &db::SqlConnector::GetInstance());
     assert(sql);
 
     bool flag = false;
     unsigned int j = 0;
     char order[256] = {0};
-    MYSQL_FIELD* fields = nullptr;
-    MYSQL_RES* res = nullptr;
+    MYSQL_FIELD *fields = nullptr;
+    MYSQL_RES *res = nullptr;
 
     if (!isLogin) {
         flag = true;

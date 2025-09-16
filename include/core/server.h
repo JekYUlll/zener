@@ -18,7 +18,6 @@
 #include <memory>
 #include <netinet/in.h>
 #include <shared_mutex>
-#include <thread>
 #include <unordered_map>
 
 namespace zener {
@@ -28,8 +27,8 @@ class Server {
 
   public:
     Server(int port, int trigMode, int timeoutMS, bool optLinger,
-           const char* sqlHost, int sqlPort, const char* sqlUser,
-           const char* sqlPwd, const char* dbName, int connPoolNum,
+           const char *sqlHost, int sqlPort, const char *sqlUser,
+           const char *sqlPwd, const char *dbName, int connPoolNum,
            int threadNum, bool openLog = false, int logLevel = -1,
            int logQueSize = -1);
 
@@ -62,16 +61,16 @@ class Server {
 
         ConnInfo() = default;
         ~ConnInfo() = default;
-        ConnInfo(const ConnInfo&) = delete;
-        ConnInfo& operator=(const ConnInfo&) = delete;
+        ConnInfo(const ConnInfo &) = delete;
+        ConnInfo &operator=(const ConnInfo &) = delete;
 
-        ConnInfo(ConnInfo&& other) noexcept
+        ConnInfo(ConnInfo &&other) noexcept
             : conn(std::move(other.conn)), connId(other.connId) {
             other.connId = 0;
             other.conn = nullptr;
         }
 
-        ConnInfo& operator=(ConnInfo&& other) noexcept {
+        ConnInfo &operator=(ConnInfo &&other) noexcept {
             if (this != &other) {
                 conn = std::move(other.conn);
                 connId = other.connId;
@@ -86,26 +85,26 @@ class Server {
 
     bool initSocket();
     void initEventMode(int trigMode);
-    void addClient(int fd, const sockaddr_in& addr);
+    void addClient(int fd, const sockaddr_in &addr);
 
     void dealListen();
-    void dealRead(http::Conn* client);
-    void dealWrite(http::Conn* client);
+    void dealRead(http::Conn *client);
+    void dealWrite(http::Conn *client);
 
-    static void sendError(int fd, const char* info);
-    void extentTime(http::Conn* client); // 刷新连接的超时时间
+    static void sendError(int fd, const char *info);
+    void extentTime(http::Conn *client); // 刷新连接的超时时间
 
-    void closeConn(http::Conn* client); // 正常工作线程中的关闭逻辑
-    void closeConnAsync(int fd, const std::function<void()>& callback =
+    void closeConn(http::Conn *client); // 正常工作线程中的关闭逻辑
+    void closeConnAsync(int fd, const std::function<void()> &callback =
                                     nullptr); // 异步关闭连接（非阻塞）
     void _closeConnInternal(
-        http::Conn&& client) const; // 实际关闭逻辑（意图与原有 closeConn
+        http::Conn &&client) const; // 实际关闭逻辑（意图与原有 closeConn
                                     // 逻辑解耦）但实际上原本实现里没用上
 
-    void onRead(http::Conn* client);
-    void handleReadError(http::Conn* client, int err);
-    void onWrite(http::Conn* client);
-    void onProcess(http::Conn* client);
+    void onRead(http::Conn *client);
+    void handleReadError(http::Conn *client, int err);
+    void onWrite(http::Conn *client);
+    void onProcess(http::Conn *client);
 
     /// @intro 校验 conn 的 fd 和 connId 的一致性
     /// @thread 安全
@@ -113,7 +112,7 @@ class Server {
     /// 2. 检查 client 是否已经关闭 IsClosed()
     /// 3. 检查 fd 是否在 _users 表中
     /// 4. 检查 connID 与表中对应是否一致
-    [[nodiscard]] bool checkFdAndMatchId(const http::Conn* client) const;
+    [[nodiscard]] bool checkFdAndMatchId(const http::Conn *client) const;
 
     /*
      * linux默认最大文件符号大小为 1024，但可以调整
@@ -170,7 +169,7 @@ class Server {
 
 } // namespace v0
 
-std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath);
+std::unique_ptr<v0::Server> NewServerFromConfig(const std::string &configPath);
 
 } // namespace zener
 

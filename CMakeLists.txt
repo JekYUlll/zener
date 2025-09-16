@@ -113,6 +113,8 @@ add_subdirectory(src)
 add_executable(Zener cmd/server/main.cpp)
 add_executable(Zener${TIMER_SUFFIX} cmd/server/main.cpp)
 
+find_package(Boost REQUIRED COMPONENTS regex)
+
 # 为基本版本链接库
 target_link_libraries(Zener PRIVATE
     zener_core
@@ -123,6 +125,7 @@ target_link_libraries(Zener PRIVATE
 target_link_libraries(Zener${TIMER_SUFFIX} PRIVATE
     zener_core
     PkgConfig::MYSQL
+    Boost::regex
 )
 
 # 添加自定义命令，在Release模式下自动strip二进制文件

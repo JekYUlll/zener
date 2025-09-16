@@ -14,7 +14,7 @@ Buffer::Buffer(size_t size)
     // _prePos(INIT_PREPEND_SIZE)
 }
 
-Buffer::Buffer(Buffer&& other) noexcept : _buffer(std::move(other._buffer)) {
+Buffer::Buffer(Buffer &&other) noexcept : _buffer(std::move(other._buffer)) {
     // 使用原子操作来安全地设置值
     _readPos.store(other._readPos.load(std::memory_order_acquire),
                    std::memory_order_release);
@@ -27,7 +27,7 @@ Buffer::Buffer(Buffer&& other) noexcept : _buffer(std::move(other._buffer)) {
     // 注意：不要对已移动的other._buffer进行bzero操作，因为它现在是一个空vector
 }
 
-Buffer& Buffer::operator=(Buffer&& other) noexcept {
+Buffer &Buffer::operator=(Buffer &&other) noexcept {
     if (this != &other) {
         _buffer = std::move(other._buffer);
         _readPos.store(other._readPos.load(std::memory_order_acquire),
@@ -49,7 +49,7 @@ void Buffer::Retrieve(std::size_t len) {
     _readPos.store(newPos, std::memory_order_release);
 }
 
-void Buffer::RetrieveUntil(const char* end) {
+void Buffer::RetrieveUntil(const char *end) {
     assert(Peek() <= end);
     Retrieve(end - Peek());
 }
@@ -74,23 +74,23 @@ std::string Buffer::ToString() const {
     return str;
 }
 
-void Buffer::Append(const std::string& str) {
+void Buffer::Append(const std::string &str) {
     Append(str.data(), str.length());
 }
 
-void Buffer::Append(const void* data, size_t len) {
+void Buffer::Append(const void *data, size_t len) {
     assert(data);
-    Append(static_cast<const char*>(data), len);
+    Append(static_cast<const char *>(data), len);
 }
 
-void Buffer::Append(const char* str, size_t len) {
+void Buffer::Append(const char *str, size_t len) {
     assert(str);
     EnsureWritable(len);
     std::copy_n(str, len, BeginWrite());
     HasWritten(len);
 }
 
-void Buffer::Append(const Buffer& buff) {
+void Buffer::Append(const Buffer &buff) {
     Append(buff.Peek(), buff.ReadableBytes());
 }
 
@@ -101,7 +101,7 @@ void Buffer::EnsureWritable(const size_t len) {
     assert(WritableBytes() >= len);
 }
 
-ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
+ssize_t Buffer::ReadFd(const int fd, int *saveErrno) {
     /*
         在非阻塞网络编程中，如何设计并使用缓冲区？
     1.
@@ -129,7 +129,7 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
         const size_t newSpace = std::max<size_t>(4096, ReadableBytes());
         try {
             EnsureWritable(newSpace);
-        } catch (const std::exception& e) {
+        } catch (const std::exception &e) {
             if (saveErrno) {
                 *saveErrno = ENOMEM;
             }
@@ -178,7 +178,7 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
         // 将第二个缓冲区的数据追加到 Buffer 中
         try {
             Append(extraBuff, extraLen);
-        } catch (const std::exception& e) {
+        } catch (const std::exception &e) {
             // 如果追加数据时发生异常，记录错误但不中断处理
             LOG_E("Buffer::ReadFd - 追加extraBuff数据失败: {}", e.what());
             if (saveErrno) {
@@ -190,7 +190,7 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
     return len;
 }
 
-ssize_t Buffer::WriteFd(const int fd, int* saveErrno) {
+ssize_t Buffer::WriteFd(const int fd, int *saveErrno) {
     const size_t readSize = ReadableBytes();
     const ssize_t len = write(fd, Peek(), readSize);
     if (len < 0) {
@@ -239,11 +239,11 @@ void Buffer::makeSpace(const size_t len) {
 
             assert(readable == ReadableBytes());
         }
-    } catch (const std::bad_alloc& e) {
+    } catch (const std::bad_alloc &e) {
         // 处理内存分配失败
         LOG_E("Buffer::makeSpace - 内存分配失败: {}", e.what());
         throw; // 重新抛出异常，让调用者处理
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         // 处理其他异常
         LOG_E("Buffer::makeSpace - 异常: {}", e.what());
         throw; // 重新抛出异常，让调用者处理
