@@ -124,7 +124,7 @@ class Server {
     [[nodiscard]] static bool
     checkServerNotFull(int fd); // 检查服务器是否已满，满了返回 false
 
-    static int setFdNonblock(int fd);
+    static int setFdNonBlock(int fd);
     /*
         设置 TCP_NODELAY，禁用Nagle算法，减少小数据包（如请求头、ACK）延迟
         大文件传输或批量数据场景可保留 Nagle 算法以提升吞吐量

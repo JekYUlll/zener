@@ -23,4 +23,4 @@ poolSize = 8           # 数据库连接池的容量
 # db = 0
 
 [thread]
-poolSize = 6 # 线程池的并行数
+poolSize = 8 # 线程池的并行数

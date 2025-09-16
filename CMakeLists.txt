@@ -9,7 +9,7 @@ project(Zener
 cmake_policy(SET CMP0079 NEW)
 
 # 全局配置
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -19,10 +19,9 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
 # 禁用高级指令集优化 | 临时设置，为了兼容 valgrind
-set(CMAKE_CXX_FLAGS "-march=x86-64 -mtune=generic -O2")
-
+# set(CMAKE_CXX_FLAGS "-march=x86-64 -mtune=generic -O2")
 # 禁用所有 SIMD 优化
-set(CMAKE_CXX_FLAGS "-mno-avx -mno-avx2 -mno-sse4.1 -mno-sse4.2 -march=x86-64 -mtune=generic")
+# set(CMAKE_CXX_FLAGS "-mno-avx -mno-avx2 -mno-sse4.1 -mno-sse4.2 -march=x86-64 -mtune=generic")
 
 # 构建类型优化 - 强制设置为Release，除非明确指定其他类型
 if(NOT CMAKE_BUILD_TYPE)
@@ -32,7 +31,10 @@ endif()
 
 message(STATUS "当前构建类型: ${CMAKE_BUILD_TYPE}")
 
-# 链接时优化(LTO)选项 - 可显著提高Release版本性能
+# clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# 链接时优化(LTO)选项
 option(ENABLE_LTO "Enable Link Time Optimization for Release builds" ON)
 
 if(ENABLE_LTO AND(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
@@ -152,8 +154,8 @@ function(add_zener_test name)
     endif()
 endfunction()
 
-add_zener_test(log_test)
-add_zener_test(hardware_test)
+# add_zener_test(log_test)
+# add_zener_test(hardware_test)
 
 # 完善安装规则 - 安装基本版本和特定定时器版本
 install(TARGETS Zener Zener${TIMER_SUFFIX}

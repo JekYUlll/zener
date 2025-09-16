@@ -227,7 +227,7 @@ void Server::sendError(int fd, const char* info) {
 void Server::closeConn(http::Conn* client) {
     assert(client);
     if (!client) {
-        LOG_W("Client is null!");
+        LOG_W("Trying to close null client!");
         return;
     }
     std::unique_lock writeLocker(_connMutex, std::defer_lock);
@@ -459,7 +459,7 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
         若顺序颠倒，可能在 epoll_wait 返回事件后，执行阻塞式读写，导致线程卡死
         （尤其在单线程 Reactor 中）
      */
-    if (setFdNonblock(fd) == -1) {
+    if (setFdNonBlock(fd) == -1) {
         LOG_E("Error setFdNonblock: {}! {}", fd, strerror(errno));
         writeLock.lock();
         _users.erase(fd);
@@ -478,7 +478,7 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
 }
 
 ///@thread 安全
-int Server::setFdNonblock(const int fd) {
+int Server::setFdNonBlock(const int fd) {
     assert(fd > 0);
     /*
         fcntl(fd, F_GETFD, 0) 返回的是 文件描述符标志（如 FD_CLOEXEC）
@@ -497,6 +497,7 @@ int Server::setFdNonblock(const int fd) {
 ///@thread 安全
 int Server::setNoDelay(const int fd) {
     constexpr int optval = 1;
+    // 关闭 Nagle 算法 → 开启 TCP_NODELAY
     return setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval));
 }
 
@@ -860,7 +861,7 @@ bool Server::initSocket() {
         close(_listenFd);
         return false;
     }
-    if (setFdNonblock(_listenFd) < 0) {
+    if (setFdNonBlock(_listenFd) < 0) {
         LOG_E("Failed to set fd {}! {}", _listenFd, strerror(errno));
     }
     return true;

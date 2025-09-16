@@ -30,7 +30,6 @@ Buffer::Buffer(Buffer&& other) noexcept : _buffer(std::move(other._buffer)) {
 Buffer& Buffer::operator=(Buffer&& other) noexcept {
     if (this != &other) {
         _buffer = std::move(other._buffer);
-        // 使用原子操作来安全地设置值
         _readPos.store(other._readPos.load(std::memory_order_acquire),
                        std::memory_order_release);
         _writePos.store(other._writePos.load(std::memory_order_acquire),
@@ -124,7 +123,8 @@ ssize_t Buffer::ReadFd(const int fd, int* saveErrno) {
     struct iovec iov[2];
 
     // 检查 Buffer 是否有可写空间，如果不足则进行适当扩容
-    if (const size_t writable = WritableBytes(); writable < 1024) { // 如果可写空间小于1KB
+    if (const size_t writable = WritableBytes();
+        writable < 1024) { // 如果可写空间小于1KB
         // 扩容至少4KB空间，但不超过已用空间的两倍
         const size_t newSpace = std::max<size_t>(4096, ReadableBytes());
         try {

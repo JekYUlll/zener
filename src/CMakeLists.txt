@@ -5,7 +5,6 @@ set(CORE_SOURCES
     core/epoller.cpp
     core/server.cpp
     database/sql_connector.cpp
-    file/file.cpp
     http/conn.cpp
     http/file_cache.cpp
     http/request.cpp
