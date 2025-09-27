@@ -4,6 +4,11 @@ int main() {
     zener::Logger::Init();
 
     const auto server = zener::NewServerFromConfig("config.toml");
-    server->Run();
+    try {
+        server->Run();
+    } catch (const std::exception &) {
+        //
+    }
+
     return 0;
 }
