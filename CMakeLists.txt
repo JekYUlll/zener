@@ -157,10 +157,6 @@ function(add_zener_test name)
     endif()
 endfunction()
 
-# add_zener_test(log_test)
-# add_zener_test(hardware_test)
-
-# 完善安装规则 - 安装基本版本和特定定时器版本
 install(TARGETS Zener Zener${TIMER_SUFFIX}
     RUNTIME DESTINATION bin
     BUNDLE DESTINATION bin

@@ -38,9 +38,6 @@ class Logger {
                                         size_t max_size = DEFAULT_MAX_FILE_SIZE,
                                         size_t max_files = DEFAULT_MAX_FILES);
 
-    // 旧接口保留，但内部会自动处理文件名
-    static void SetLogFilePath(std::string_view fileName);
-
     static void Flush();
     static void Shutdown();
 
@@ -65,7 +62,7 @@ class Logger {
                     const spdlog::memory_buf_t* buffer);
 
     // 根据当前日期生成日志文件名
-    static std::string GenerateLogFileName(const std::string& prefix);
+    static std::string generateLogFileName(const std::string& prefix);
 
     static Logger _instance;
     static std::string _logFileName;  // 当前日志文件的完整路径

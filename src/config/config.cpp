@@ -20,7 +20,7 @@ std::unordered_map<std::string, std::string> Config::_configMap;
 
 std::atomic<bool> Config::_initialized = false;
 
-bool Config::read(std::string const& filename) {
+bool Config::read(std::string const &filename) {
     namespace fs = std::filesystem;
     // 检查文件是否存在
     if (!fs::exists(filename)) {
@@ -34,7 +34,7 @@ bool Config::read(std::string const& filename) {
               filename);
         try {
             permissions(filename, fs::perms::owner_read, fs::perm_options::add);
-        } catch (const fs::filesystem_error& e) {
+        } catch (const fs::filesystem_error &e) {
             LOG_E("Failed to add read permission: {}!", e.what());
             return false;
         }
@@ -89,7 +89,7 @@ bool Config::read(std::string const& filename) {
     return true;
 }
 
-bool Config::Init(const std::string& configPath) {
+bool Config::Init(const std::string &configPath) {
     if (_initialized.load(std::memory_order_acquire)) {
         return true;
     }
@@ -118,7 +118,7 @@ bool Config::Init(const std::string& configPath) {
 
 void Config::Print() {
     if (!Initialized()) {
-        LOG_W("Should init config before {}!", __FUNCTION__);
+        LOG_E("Should init config before {}!", __FUNCTION__);
         return;
     }
     LOG_I("===================== Config Loaded =====================");
@@ -128,10 +128,10 @@ void Config::Print() {
     LOG_I("=========================================================");
 }
 
-const std::string& Config::GetConfig(const std::string& key) {
+const std::string &Config::GetConfig(const std::string &key) {
     static const std::string empty;
     if (!Initialized()) {
-        LOG_W("Should init config before {}!", __FUNCTION__);
+        LOG_E("Should init config before {}!", __FUNCTION__);
         return empty;
     }
     if (const auto it = _configMap.find(key); it != _configMap.end()) {
@@ -141,19 +141,18 @@ const std::string& Config::GetConfig(const std::string& key) {
     return empty;
 }
 
-const std::string& Config::GetConfigSafe(const std::string& key) const {
+const std::string &Config::GetConfigSafe(const std::string &key) const {
     static const std::string empty;
     if (!Initialized()) {
         LOG_W("Should init before {}.", __FUNCTION__);
         return empty;
     }
-    // TODO 增加一个超时取消
     {
         std::lock_guard locker(_mtx);
         if (const auto it = _configMap.find(key); it != _configMap.end()) {
             return it->second;
         }
-        LOG_W("Config key '{}' not found.", key);
+        LOG_W("Config key '{}' not found!", key);
     }
     return empty;
 }

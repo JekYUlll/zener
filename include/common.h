@@ -1,12 +1,8 @@
 #ifndef ZENER_CONFIG_COMMON_H
 #define ZENER_CONFIG_COMMON_H
 
-#include "utils/defer.h"
-#include "utils/free.hpp"
 #include "utils/hash.hpp"
 #include "utils/log/logger.h"
-
-#define ZENER_CONFIG_FILEPATH "config.toml" // 实际上没有用到
 
 #ifdef __USE_STRING
 namespace zener {

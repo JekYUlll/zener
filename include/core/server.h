@@ -47,7 +47,6 @@ class Server {
         为了扩展性
     */
     struct ConnInfo {
-        // http::Conn conn;   // 连接对象 TODO 改为智能指针
         std::unique_ptr<http::Conn> conn{nullptr}; // 初始化为 nullptr
         /*
             唯一连接ID 用于替代fd. 从1开始，0表示无效值.
@@ -140,6 +139,7 @@ class Server {
     int _listenFd{};
     std::string _cwd{};       // 工作目录
     std::string _staticDir{}; // 静态资源目录
+    std::string _logDir{};
 
     uint32_t _listenEvent{};
     uint32_t _connEvent{};

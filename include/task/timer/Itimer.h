@@ -13,14 +13,14 @@ class ITimerManager {
 
     // 调度一个任务，无限重复执行
     template <typename F, typename... Args>
-    void Schedule(int milliseconds, F&& f, Args&&... args) {
+    void Schedule(int milliseconds, F &&f, Args &&...args) {
         DoScheduleImpl(milliseconds, -1, std::forward<F>(f),
                        std::forward<Args>(args)...);
     }
 
     // 调度一个任务，指定重复次数
     template <typename F, typename... Args>
-    void Schedule(int milliseconds, int repeat, F&& f, Args&&... args) {
+    void Schedule(int milliseconds, int repeat, F &&f, Args &&...args) {
         DoScheduleImpl(milliseconds, repeat, std::forward<F>(f),
                        std::forward<Args>(args)...);
     }
@@ -36,7 +36,7 @@ class ITimerManager {
   protected:
     // 模板方法的实现，由子类提供
     template <typename F, typename... Args>
-    void DoScheduleImpl(int milliseconds, int repeat, F&& f, Args&&... args) {
+    void DoScheduleImpl(int milliseconds, int repeat, F &&f, Args &&...args) {
         auto callback = [func = std::forward<F>(f),
                          tup = std::make_tuple(std::forward<Args>(args)...)]() {
             std::apply(func, tup);

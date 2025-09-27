@@ -21,9 +21,8 @@ bool Epoller::AddFd(const int fd, const uint32_t events) const {
     epoll_event ev = {};
     ev.data.fd = fd;
     ev.events = events;
-    // FIXME 此处是连接 fd，设置 EPOLLET 代表要循环读取数据
-    ev.events = _isET ? EPOLLIN | EPOLLET
-                      : EPOLLIN; // 不知是否需要，原代码中没有设置 _isET
+    // 此处是连接 fd，设置 EPOLLET 代表要循环读取数据
+    ev.events = _isET ? EPOLLIN | EPOLLET : EPOLLIN;
     return 0 == epoll_ctl(_epollFd, EPOLL_CTL_ADD, fd, &ev);
 }
 
@@ -44,8 +43,7 @@ bool Epoller::DelFd(const int fd) const {
         return false;
     }
     epoll_event ev = {};
-    // TODO 返回值处理
-    if(const int ret = epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, &ev); ret == 0) {
+    if (const int ret = epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, &ev); ret == 0) {
         return true;
     }
     LOG_E("Error deleting fd:{} from epoll! {}", fd, strerror(errno));

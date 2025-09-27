@@ -8,7 +8,6 @@ Content-Length: length                                     \r\n (一条请求头
                                                            \r\n       (空行)
 UserID=string&PWD=string&OrderConfirmation=string                     (请求体)
 */
-// 整个项目最麻烦的地方：字符串解析。直接抄了。
 #include "buffer/buffer.h"
 
 #include <string>
@@ -86,24 +85,6 @@ class Request {
     static const std::unordered_map<std::string, int> DEFAULT_HTML_TAG;
     static int convertHex(char ch);
 };
-
-// class Request {
-//   public:
-//     Request();
-//     ~Request();
-
-//     std::string Method() const;
-//     std::string Path() const;
-//     std::unordered_map<std::string, std::string> Query() const;
-//     std::unordered_map<std::string, std::string> Headers() const;
-//     std::string Body() const;
-
-//     std::vector<File*> Files() const;
-
-//   private:
-//     Entity _entity;
-//     std::unique_ptr<Header> _pHeader;
-// };
 
 } // namespace zener::http
 

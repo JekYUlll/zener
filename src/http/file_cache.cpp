@@ -12,21 +12,21 @@ namespace zener::http {
 FileCache::~FileCache() {
     // 清理所有缓存的文件映射
     std::unique_lock<std::shared_mutex> lock(_cacheMutex);
-    for (auto&[fst, snd] : _fileCache) {
+    for (auto &[fst, snd] : _fileCache) {
         UnloadFile(snd);
     }
     _fileCache.clear();
 }
 
-CachedFile* FileCache::GetFileMapping(const std::string& filePath,
-                                      const struct stat& fileStat) {
+CachedFile *FileCache::GetFileMapping(const std::string &filePath,
+                                      const struct stat &fileStat) {
     // 先尝试以共享锁方式查找缓存
     {
         std::shared_lock<std::shared_mutex> readLock(_cacheMutex);
         if (const auto it = _fileCache.find(filePath); it != _fileCache.end()) {
             // 检查文件是否被修改
-            if (CachedFile* cache = it->second; cache->lastModTime == fileStat.st_mtime) {
-                // 更新访问时间和引用计数
+            if (CachedFile *cache = it->second;
+                cache->lastModTime == fileStat.st_mtime) {
                 cache->lastAccess = std::chrono::steady_clock::now();
                 ++cache->refCount;
 
@@ -45,8 +45,8 @@ CachedFile* FileCache::GetFileMapping(const std::string& filePath,
     // 再次检查，避免竞争条件
     if (const auto it = _fileCache.find(filePath); it != _fileCache.end()) {
         // 再次检查文件是否被修改
-        if (CachedFile* cache = it->second; cache->lastModTime == fileStat.st_mtime) {
-            // 更新访问时间和引用计数
+        if (CachedFile *cache = it->second;
+            cache->lastModTime == fileStat.st_mtime) {
             cache->lastAccess = std::chrono::steady_clock::now();
             ++cache->refCount;
 
@@ -55,7 +55,6 @@ CachedFile* FileCache::GetFileMapping(const std::string& filePath,
                   filePath, cache->refCount.load());
             return cache;
         } else {
-            // 删除旧缓存
             LOG_D("Removing expired file cache: {}", filePath);
             UnloadFile(cache);
             _fileCache.erase(it);
@@ -63,7 +62,7 @@ CachedFile* FileCache::GetFileMapping(const std::string& filePath,
     }
 
     // 加载文件并创建新缓存
-    CachedFile* newCache = LoadFile(filePath, fileStat);
+    CachedFile *newCache = LoadFile(filePath, fileStat);
     if (newCache) {
         _fileCache[filePath] = newCache;
         ++_totalMappedFiles;
@@ -74,11 +73,10 @@ CachedFile* FileCache::GetFileMapping(const std::string& filePath,
     return newCache;
 }
 
-void FileCache::ReleaseFileMapping(const std::string& filePath) {
-    // 使用排他锁以确保引用计数修改的安全性
+void FileCache::ReleaseFileMapping(const std::string &filePath) {
     std::unique_lock writeLock(_cacheMutex);
     if (const auto it = _fileCache.find(filePath); it != _fileCache.end()) {
-        CachedFile* cache = it->second;
+        CachedFile *cache = it->second;
         // 确保引用计数不会变成负数
         int currentCount = cache->refCount.load();
         while (currentCount > 0) {
@@ -104,10 +102,11 @@ void FileCache::CleanupCache(const int maxIdleTime) {
 
     for (auto it = _fileCache.begin(); it != _fileCache.end();) {
         // 检查引用计数是否为0，确保文件未被使用
-        if (const CachedFile* cache = it->second; cache->refCount <= 0) {
-            const auto idleTime = std::chrono::duration_cast<std::chrono::seconds>(
-                                now - cache->lastAccess)
-                                .count();
+        if (const CachedFile *cache = it->second; cache->refCount <= 0) {
+            const auto idleTime =
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    now - cache->lastAccess)
+                    .count();
 
             if (idleTime > maxIdleTime) {
                 LOG_D("Cleaning idle file cache: {}, idle time: {} seconds, "
@@ -131,8 +130,8 @@ void FileCache::CleanupCache(const int maxIdleTime) {
           removedCount, _fileCache.size());
 }
 
-CachedFile* FileCache::LoadFile(const std::string& filePath,
-                                const struct stat& fileStat) {
+CachedFile *FileCache::LoadFile(const std::string &filePath,
+                                const struct stat &fileStat) {
     const int fd = open(filePath.data(), O_RDONLY);
     if (fd < 0) {
         LOG_E("Failed to open file: {}, error: {}", filePath, strerror(errno));
@@ -143,30 +142,32 @@ CachedFile* FileCache::LoadFile(const std::string& filePath,
      *将文件映射到内存提高文件的访问速度
      *MAP_PRIVATE 建立一个写入时拷贝的私有映射
      */
-    void* mmapPtr = mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE, fd, 0);
+    void *mmapPtr = mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE, fd, 0);
     if (mmapPtr == MAP_FAILED) {
         LOG_E("mmap file failed: {}, error: {}", filePath, strerror(errno));
         return nullptr;
     }
-    close(fd); // 映射后可以关闭文件描述符 // 在判断前还是判断好=后？
-    auto* cache = new CachedFile(); // TODO 是否内存泄漏？
-    cache->data = static_cast<char*>(mmapPtr);
+    close(fd); // 映射后可以关闭文件描述符 // 在判断前还是判断后？
+    auto *cache = new CachedFile();
+    cache->data = static_cast<char *>(mmapPtr);
     cache->size = fileSize;
     cache->refCount.store(1); // 初始引用计数为1
     cache->lastModTime = fileStat.st_mtime;
     cache->lastAccess = std::chrono::steady_clock::now();
 
     LOG_D("File successfully mapped to cache: {}, size: {}, address: {:p}",
-          filePath, fileSize, (void*)cache->data);
+          filePath, fileSize, (void *)cache->data);
 
     return cache;
 }
 
-void FileCache::UnloadFile(const CachedFile* file) {
-    if (file && file->data) {
-        LOG_D("Unloading file mapping: address={:p}, size={}",
-              (void*)file->data, file->size);
-        munmap(file->data, file->size);
+void FileCache::UnloadFile(const CachedFile *file) {
+    if (file) {
+        if (file->data) {
+            LOG_D("Unloading file mapping: address={:p}, size={}",
+                  (void *)file->data, file->size);
+            munmap(file->data, file->size);
+        }
         delete file;
     }
 }

@@ -19,7 +19,7 @@
 
 namespace zener::http {
 
-// TODO
+// TODO:
 // 现在的 Conn 存储 request 和 response , 感觉有点占空间
 // 可以修改为指针或者句柄
 
@@ -35,13 +35,13 @@ class Conn {
 
     Conn();
     ~Conn();
-    Conn(const Conn&) = delete;
-    Conn& operator=(const Conn&) = delete;
+    Conn(const Conn &) = delete;
+    Conn &operator=(const Conn &) = delete;
 
-    Conn(Conn&& other) noexcept;
-    Conn& operator=(Conn&& other) noexcept;
+    Conn(Conn &&other) noexcept;
+    Conn &operator=(Conn &&other) noexcept;
 
-    void Init(int sockFd, const sockaddr_in& addr);
+    void Init(int sockFd, const sockaddr_in &addr);
 
     void SetConnId(const uint64_t id) { _connId = id; }
     _ZENER_SHORT_FUNC uint64_t GetConnId() const { return _connId; }
@@ -50,9 +50,9 @@ class Conn {
 
     _ZENER_SHORT_FUNC bool IsClosed() const { return _isClose; }
 
-    [[nodiscard]] ssize_t Read(int* saveErrno);
+    [[nodiscard]] ssize_t Read(int *saveErrno);
 
-    [[nodiscard]] ssize_t Write(int* saveErrno);
+    [[nodiscard]] ssize_t Write(int *saveErrno);
 
     [[nodiscard]] ProcessResult Process();
 
@@ -65,7 +65,7 @@ class Conn {
 
     _ZENER_SHORT_FUNC uint16_t GetPort() const { return _addr.sin_port; }
 
-    _ZENER_SHORT_FUNC const char* GetIP() const {
+    _ZENER_SHORT_FUNC const char *GetIP() const {
         return inet_ntoa(_addr.sin_addr);
     }
 
@@ -76,7 +76,7 @@ class Conn {
     }
 
     static bool isET;             // 是否为边缘触发
-    static const char* staticDir; // 请求文件对应的根目录
+    static const char *staticDir; // 请求文件对应的根目录
     static std::atomic<int>
         userCount; // TODO 感觉这玩意应该放在 Server 里，就不需要用原子了
 

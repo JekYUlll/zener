@@ -3,7 +3,7 @@ IndentWidth: 4
 TabWidth: 4
 UseTab: Never
 # AlwaysBreakTemplateDeclarations: Yes
-PointerAlignment: Left
+# PointerAlignment: Left
 # https://clang.llvm.org/docs/ClangFormatStyleOptions.html
 # Standard: c++20
 # IndentWidth: 4

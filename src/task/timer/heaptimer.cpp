@@ -8,8 +8,6 @@
 namespace zener::v0 {
 
 Timer::Timer() {
-    // std::vector::reserve 用于为 std::vector
-    // 预先分配至少能容纳指定数量元素的内存空间
     _heap.reserve(64);
     LOG_D("堆定时器初始化，预分配容量：64");
 }
@@ -69,7 +67,7 @@ bool Timer::siftDown(size_t index, size_t n) {
     return i > index;
 }
 
-void Timer::Add(int id, int timeout, const TimeoutCallBack& cb) {
+void Timer::Add(int id, int timeout, const TimeoutCallBack &cb) {
     assert(id >= 0);
     size_t i;
     if (_ref.count(id) == 0) {
@@ -124,7 +122,7 @@ void Timer::doWork(int id) {
     if (callback) {
         try {
             callback();
-        } catch (const std::exception& e) {
+        } catch (const std::exception &e) {
             // 防止回调异常导致崩溃
             // 记录错误但不中断程序
         }
@@ -190,7 +188,7 @@ void Timer::Tick() {
         if (callback) {
             try {
                 callback();
-            } catch (const std::exception& e) {
+            } catch (const std::exception &e) {
                 LOG_E("定时器：回调执行异常 id={}, 错误={}", id, e.what());
             } catch (...) {
                 LOG_E("定时器：回调执行未知异常 id={}", id);
@@ -260,7 +258,7 @@ void TimerManager::DoSchedule(int milliseconds, int repeat,
             // 处理重复执行
             auto it = _repeats.find(id);
             if (it != _repeats.end()) {
-                auto& [remaining, period] = it->second;
+                auto &[remaining, period] = it->second;
                 if (remaining > 0) {
                     remaining--;
                     if (remaining == 0) {
@@ -278,7 +276,7 @@ void TimerManager::DoSchedule(int milliseconds, int repeat,
                     _timer.Add(id, period, *callbackPtr);
                 }
             }
-        } catch (const std::exception& e) {
+        } catch (const std::exception &e) {
             LOG_E("定时器：回调执行异常 id={}, 错误={}", id, e.what());
         } catch (...) {
             LOG_E("定时器：回调执行未知异常 id={}", id);
@@ -288,7 +286,7 @@ void TimerManager::DoSchedule(int milliseconds, int repeat,
     // 添加到计时器
     try {
         _timer.Add(id, milliseconds, *callbackPtr);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         LOG_E("定时器：添加定时器异常 id={}, 错误={}", id, e.what());
         _repeats.erase(id); // 清理已创建的资源
     }
@@ -329,7 +327,7 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
                 // 处理重复执行
                 auto it = _repeats.find(id);
                 if (it != _repeats.end()) {
-                    auto& [remaining, period] = it->second;
+                    auto &[remaining, period] = it->second;
                     if (remaining > 0) {
                         remaining--;
                         if (remaining == 0) {
@@ -359,7 +357,7 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
             } else {
                 LOG_W("定时器：key已失效或被替换 key={}, id={}", key, id);
             }
-        } catch (const std::exception& e) {
+        } catch (const std::exception &e) {
             LOG_E("定时器：回调执行异常 key={}, id={}, 错误={}", key, id,
                   e.what());
         } catch (...) {
@@ -370,7 +368,7 @@ void TimerManager::DoScheduleWithKey(int key, int milliseconds, int repeat,
     // 添加到计时器
     try {
         _timer.Add(id, milliseconds, *callbackPtr);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         LOG_E("定时器：添加定时器异常 key={}, id={}, 错误={}", key, id,
               e.what());
         _repeats.erase(id); // 清理已创建的资源

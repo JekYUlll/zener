@@ -1,9 +1,6 @@
 #ifndef ZENER_CONFIG_H
 #define ZENER_CONFIG_H
 
-// TODO:
-// 添加配置的一些持久化，保持到本地（数据库读取依赖于config，似乎不能存数据库）
-
 #include "common.h"
 
 #include <atomic>
@@ -20,22 +17,22 @@ struct Config {};
 struct Config {
     std::string configPath;
 
-    Config(const Config&) = delete;
-    Config& operator=(Config const&) = delete;
+    Config(const Config &) = delete;
+    Config &operator=(Config const &) = delete;
 
-    static bool Init(const std::string& configPath);
+    static bool Init(const std::string &configPath);
 
     _ZENER_SHORT_FUNC static bool Initialized() {
         return _initialized.load(std::memory_order_acquire);
     }
 
-    _ZENER_SHORT_FUNC static Config& GetInstance() { return _instance; }
+    _ZENER_SHORT_FUNC static Config &GetInstance() { return _instance; }
 
     static void Print();
 
-    static const std::string& GetConfig(const std::string& key);
+    static const std::string &GetConfig(const std::string &key);
     // 加锁的版本，多线程用
-    const std::string& GetConfigSafe(const std::string& key) const;
+    const std::string &GetConfigSafe(const std::string &key) const;
 
   private:
     Config() : configPath(ZENER_CONFIG_FILEPATH) {}
@@ -44,7 +41,7 @@ struct Config {
 
     mutable std::mutex _mtx;
 
-    static bool read(const std::string& filename);
+    static bool read(const std::string &filename);
 
     // 使用哈希表而不是红黑树，此处好处是查找更快，坏处是 Print
     // 的时候键不是有序的

@@ -9,8 +9,7 @@ namespace zener {
 // 原子类型（如
 // std::atomic<T>）的移动构造函数是被删除的，这是为了保证原子操作的线程安全性和语义完整性
 
-Buffer::Buffer(size_t size)
-    : _buffer(INIT_BUFFER_SIZE), _readPos(0), _writePos(0) {
+Buffer::Buffer(size_t size) : _buffer(size), _readPos(0), _writePos(0) {
     // _prePos(INIT_PREPEND_SIZE)
 }
 
@@ -133,7 +132,7 @@ ssize_t Buffer::ReadFd(const int fd, int *saveErrno) {
             if (saveErrno) {
                 *saveErrno = ENOMEM;
             }
-            LOG_E("Buffer::ReadFd - failed: {}", e.what());
+            LOG_E("Buffer read fd failed: {}", e.what());
             return -1;
         }
     }
@@ -240,13 +239,11 @@ void Buffer::makeSpace(const size_t len) {
             assert(readable == ReadableBytes());
         }
     } catch (const std::bad_alloc &e) {
-        // 处理内存分配失败
-        LOG_E("Buffer::makeSpace - 内存分配失败: {}", e.what());
-        throw; // 重新抛出异常，让调用者处理
+        LOG_E("buffer allocate: {}", e.what());
+        throw;
     } catch (const std::exception &e) {
-        // 处理其他异常
-        LOG_E("Buffer::makeSpace - 异常: {}", e.what());
-        throw; // 重新抛出异常，让调用者处理
+        LOG_E("Buffer makeSpace -: {}", e.what());
+        throw;
     }
 }
 

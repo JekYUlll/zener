@@ -64,7 +64,7 @@ void Logger::Init() {
 }
 
 // 生成包含日期的日志文件名
-std::string Logger::GenerateLogFileName(const std::string& prefix) {
+std::string Logger::generateLogFileName(const std::string& prefix) {
     try {
         const auto now = std::chrono::system_clock::now();
         const auto now_time = std::chrono::system_clock::to_time_t(now);
@@ -105,7 +105,7 @@ bool Logger::WriteToFile(const std::string_view logDir,
             }
         }
         const std::string fileName =
-            GenerateLogFileName(std::string(_filePrefix));
+            generateLogFileName(std::string(_filePrefix));
         const std::filesystem::path fullPath = dirPath / fileName;
         _logFileName = fullPath.string();
 
@@ -158,19 +158,6 @@ bool Logger::WriteToFile(const std::string_view logDir,
     } catch (const std::exception& ex) {
         std::cerr << "✖️Failed with exception: " << ex.what() << std::endl;
         return false;
-    }
-}
-
-void Logger::SetLogFilePath(const std::string_view fileName) {
-    try {
-        // 提取目录部分
-        const std::filesystem::path filePath(fileName);
-        const auto parentPath = filePath.parent_path().string();
-        WriteToFile(parentPath.empty()
-                        ? "."
-                        : parentPath); // 使用新接口，根据日期自动生成文件名
-    } catch (const std::exception& ex) {
-        std::cerr << "Error setting log file path: " << ex.what() << std::endl;
     }
 }
 

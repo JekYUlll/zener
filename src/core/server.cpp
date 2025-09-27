@@ -27,8 +27,8 @@ namespace zener {
 namespace v0 {
 
 Server::Server(int port, const int trigMode, const int timeoutMS,
-               const bool optLinger, const char* sqlHost, const int sqlPort,
-               const char* sqlUser, const char* sqlPwd, const char* dbName,
+               const bool optLinger, const char *sqlHost, const int sqlPort,
+               const char *sqlUser, const char *sqlPwd, const char *dbName,
                int connPoolNum, int threadNum, bool openLog, int logLevel,
                int logQueSize)
     : _port(port), _openLinger(optLinger), _timeoutMS(timeoutMS),
@@ -50,10 +50,7 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     initEventMode(trigMode); // TODO 在Epoller里已经设置一遍了
 
     if (!initSocket()) {
-        _isClose.store(
-            false,
-            std::
-                memory_order_release);
+        _isClose.store(false, std::memory_order_release);
 
         throw std::runtime_error("Failed to initialize listen socket.");
     }
@@ -61,8 +58,7 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     db::SqlConnector::GetInstance().Init(sqlHost, sqlPort, sqlUser, sqlPwd,
                                          dbName, connPoolNum);
 
-    const std::string logDir =
-        "logs"; // 此处直接写死日志位置： ${cwd}/logs/xxx.log
+    const std::string logDir = GET_CONFIG("log.dir");
     const std::string fullLogDir = _cwd + "/" + logDir;
     if (!Logger::WriteToFile(fullLogDir)) {
         LOG_E("Failed to create log file in directory: {}!", fullLogDir);
@@ -75,12 +71,14 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     LOG_I("|   / /_| |___| |\\  | |___|  _ <");
     LOG_I("|  /____|_____|_| \\_|_____|_| \\_\\");
     LOG_T("🚀--------------------------------+--");
-    LOG_I("| 󰩟 port: {}, OpenLinger: {}", port, optLinger ? "true" : "false");
+    LOG_I("| 󰩟 port: {}, OpenLinger: {}", port,
+          optLinger ? "true" : "false");
     LOG_I("|  Listen Mode: {}, OpenConn Mode: {}",
           (_listenEvent & EPOLLET ? "ET" : "LT"),
           (_connEvent & EPOLLET ? "ET" : "LT"));
     LOG_I("|  static path: {}", http::Conn::staticDir);
-    LOG_I("| 󰰙 SqlConnPool num: {}, ThreadPool num: {}", connPoolNum, threadNum);
+    LOG_I("| 󰰙 SqlConnPool num: {}, ThreadPool num: {}", connPoolNum,
+          threadNum);
     LOG_I("| 󰔛 TimerManager: {}", TIMER_MANAGER_TYPE);
     LOG_T("-------------------------------------+--");
 }
@@ -210,7 +208,7 @@ void Server::Stop() {
 }
 
 ///@thread 安全
-void Server::sendError(int fd, const char* info) {
+void Server::sendError(int fd, const char *info) {
     assert(fd > 0);
     if (const auto ret = send(fd, info, strlen(info), 0); ret > 0) {
         LOG_E("Send error to client {} error: {}! {}", fd, info,
@@ -224,7 +222,7 @@ void Server::sendError(int fd, const char* info) {
 ///@important 内部有锁
 ///@todo 能否检测重复关闭？
 ///@thread 安全
-void Server::closeConn(http::Conn* client) {
+void Server::closeConn(http::Conn *client) {
     assert(client);
     if (!client) {
         LOG_W("Trying to close null client!");
@@ -244,7 +242,7 @@ void Server::closeConn(http::Conn* client) {
     }
     if constexpr (false) {
         /*
-         * TODO 删除定时器里预订的超时关闭操作，因为此函数会在此刻提前删除？
+         * TODO: 删除定时器里预订的超时关闭操作，因为此函数会在此刻提前删除？
          * 实际上似乎脱裤子放屁，因为定时器里注册的本来就是此函数
          * 注册之后在本函数里又给 Cancel
          * 掉了，导致计时器一直是空的？所以连接占满，超时关闭失效？
@@ -252,7 +250,7 @@ void Server::closeConn(http::Conn* client) {
         if (_timeoutMS > 0) {
             try {
                 TimerManagerImpl::GetInstance().CancelByKey(connId);
-            } catch (const std::exception& e) {
+            } catch (const std::exception &e) {
                 LOG_E("Exception canceling fd {} from timer: connId {}: {}", fd,
                       connId, e.what());
             } catch (...) {
@@ -313,7 +311,7 @@ void Server::closeConn(http::Conn* client) {
 ///@change 没必要传入fd，传入 conn 就够了
 ///@praram 右值的conn
 ///@thread 安全
-void Server::_closeConnInternal(http::Conn&& client) const {
+void Server::_closeConnInternal(http::Conn &&client) const {
     auto fd = client.GetFd();
     assert(fd > 0);
     if (fd <= 0) {
@@ -326,7 +324,7 @@ void Server::_closeConnInternal(http::Conn&& client) const {
         try { // 取消计时器里注册的超时关闭任务，因为此时就要关闭了
             // TODO 严重bug：此处是否又把自己取消了？
             TimerManagerImpl::GetInstance().CancelByKey(connId);
-        } catch (const std::exception& e) {
+        } catch (const std::exception &e) {
             LOG_E("Timer cancel error: {}", e.what());
         }
     }
@@ -340,7 +338,7 @@ void Server::_closeConnInternal(http::Conn&& client) const {
 
 ///@thread 安全
 ///@intro 弃用
-void Server::closeConnAsync(int fd, const std::function<void()>& callback) {
+void Server::closeConnAsync(int fd, const std::function<void()> &callback) {
     ConnInfo connInfoCopy{};
     {
         std::unique_lock locker(_connMutex);
@@ -365,7 +363,7 @@ void Server::closeConnAsync(int fd, const std::function<void()>& callback) {
 }
 
 ///@thread 安全
-void Server::addClient(int fd, const sockaddr_in& addr) {
+void Server::addClient(int fd, const sockaddr_in &addr) {
     assert(fd > 0);
     if (fd <= 0) {
         LOG_E("Invalid fd: {}!", fd);
@@ -403,7 +401,7 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
                 close(fd);        // 没啥影响
                 return;
             }
-            auto& connInfo = it->second;
+            auto &connInfo = it->second;
             auto conn = std::make_unique<http::Conn>();
             /*
              *TODO 此处为业务id赋值
@@ -424,7 +422,7 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
             writeLock.unlock();
         }
 
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         LOG_E("Add client exception. fd:{}. id:{}. {}", fd, connId, e.what());
     }
     /*
@@ -440,7 +438,7 @@ void Server::addClient(int fd, const sockaddr_in& addr) {
                  */
                 assert(fd > 0);
                 assert(connId > 0);
-                http::Conn* conn = nullptr;
+                http::Conn *conn = nullptr;
                 {
                     std::shared_lock readLock(_connMutex, std::defer_lock);
                     if (!_isClose.load() && _users.count(fd) > 0 &&
@@ -518,7 +516,7 @@ void Server::dealListen() {
     if (_listenEvent & EPOLLET) { // ET 模式：必须处理所有就绪连接
         while (!_isClose.load(std::memory_order_acquire)) {
             const int fd = accept(
-                _listenFd, reinterpret_cast<struct sockaddr*>(&addr), &len);
+                _listenFd, reinterpret_cast<struct sockaddr *>(&addr), &len);
             if (fd <= 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     break; // 没有更多连接可接受
@@ -539,7 +537,7 @@ void Server::dealListen() {
             std::min(50, MAX_FD - http::Conn::userCount.load());
         for (int i = 0; i < maxAccept; ++i) {
             const int fd = accept(
-                _listenFd, reinterpret_cast<struct sockaddr*>(&addr), &len);
+                _listenFd, reinterpret_cast<struct sockaddr *>(&addr), &len);
             if (fd <= 0) {
                 if (errno == EAGAIN)
                     break;
@@ -554,7 +552,7 @@ void Server::dealListen() {
 }
 
 ///@thread 安全
-void Server::dealRead(http::Conn* client) {
+void Server::dealRead(http::Conn *client) {
     assert(client);
     if (!client) {
         return;
@@ -579,7 +577,7 @@ void Server::dealRead(http::Conn* client) {
 }
 
 ///@thread 安全
-void Server::dealWrite(http::Conn* client) {
+void Server::dealWrite(http::Conn *client) {
     assert(client);
     if (!client) {
         return;
@@ -602,7 +600,7 @@ void Server::dealWrite(http::Conn* client) {
 }
 
 ///@thread 安全
-void Server::extentTime(http::Conn* client) {
+void Server::extentTime(http::Conn *client) {
     assert(client);
     if (!client) {
         return;
@@ -636,7 +634,7 @@ void Server::extentTime(http::Conn* client) {
                 LOG_D("Timer callback aborted: server is closing.");
                 return;
             }
-            http::Conn* conn = nullptr;
+            http::Conn *conn = nullptr;
             {
                 std::shared_lock lk(this->_connMutex);
                 if (_users[fd].connId != connId) {
@@ -656,7 +654,7 @@ void Server::extentTime(http::Conn* client) {
 
 ///@err 错误处理
 /// 仅打印
-void Server::handleReadError(http::Conn* client, int err) {
+void Server::handleReadError(http::Conn *client, int err) {
     const int fd = client->GetFd();
     switch (err) {
     case ECONNRESET:
@@ -672,7 +670,7 @@ void Server::handleReadError(http::Conn* client, int err) {
 }
 
 ///@thread 工作线程在线程池里调用
-void Server::onRead(http::Conn* client) {
+void Server::onRead(http::Conn *client) {
     assert(client);
     const int fd = client->GetFd();
     if (!checkFdAndMatchId(client)) {
@@ -711,14 +709,14 @@ void Server::onRead(http::Conn* client) {
 }
 
 ///@thread 工作线程在线程池里调用
-void Server::onProcess(http::Conn* client) {
+void Server::onProcess(http::Conn *client) {
     assert(client);
     if (!checkFdAndMatchId(client)) {
         LOG_E("Not match id!");
         return;
     }
     int fd = client->GetFd();
-    switch (auto result = client->Process()) {
+    switch (client->Process()) {
     case http::Conn::ProcessResult::NEED_MORE_DATA:
         /* 重新注册EPOLLIN */
         if (!_epoller->ModFd(fd, _connEvent | EPOLLIN)) {
@@ -744,7 +742,7 @@ void Server::onProcess(http::Conn* client) {
 }
 
 ///@thread 工作线程在线程池里调用
-void Server::onWrite(http::Conn* client) {
+void Server::onWrite(http::Conn *client) {
     assert(client);
     int fd = client->GetFd();
     if (!checkFdAndMatchId(client)) {
@@ -828,7 +826,7 @@ bool Server::initSocket() {
     }
     constexpr int optval = 1;
     // 端口复用，只有最后一个套接字会正常接收数据
-    ret = setsockopt(_listenFd, SOL_SOCKET, SO_REUSEADDR, (const void*)&optval,
+    ret = setsockopt(_listenFd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval,
                      sizeof(int));
     if (ret == -1) {
         LOG_E("Set socket error! {}", strerror(errno));
@@ -836,7 +834,7 @@ bool Server::initSocket() {
         return false;
     }
 
-    ret = bind(_listenFd, reinterpret_cast<struct sockaddr*>(&addr),
+    ret = bind(_listenFd, reinterpret_cast<struct sockaddr *>(&addr),
                sizeof(addr));
     if (ret < 0) {
         LOG_E("Bind port: {0} error! {1}", _port, strerror(errno));
@@ -867,7 +865,7 @@ bool Server::initSocket() {
     return true;
 }
 
-bool Server::checkFdAndMatchId(const http::Conn* client) const {
+bool Server::checkFdAndMatchId(const http::Conn *client) const {
     int fd = client->GetFd();
     assert(fd > 0);
     if (fd <= 0 || fd > MAX_FD) {
@@ -879,7 +877,7 @@ bool Server::checkFdAndMatchId(const http::Conn* client) const {
         return false;
     }
     {
-        std::shared_lock locker(_connMutex);
+        std::shared_lock readLock(_connMutex);
         if (_users.count(fd) == 0) {
             LOG_W("No such fd {} in _users!", fd);
             return false;
@@ -896,8 +894,7 @@ bool Server::checkFdAndMatchId(const http::Conn* client) const {
 
 } // namespace v0
 
-std::unique_ptr<v0::Server> NewServerFromConfig(const std::string& configPath) {
-    // TODO 如果没有配置文件，生成一份默认配置文件
+std::unique_ptr<v0::Server> NewServerFromConfig(const std::string &configPath) {
     if (!Config::Init(configPath)) {
         LOG_E("Failed to initialize config from {}!", configPath);
         return nullptr;

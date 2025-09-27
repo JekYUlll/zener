@@ -10,6 +10,9 @@ cmake-build*/
 .vscode/
 sql/data/
 results/
+out/
+
+*.bak
 
 # Prerequisites
 *.d

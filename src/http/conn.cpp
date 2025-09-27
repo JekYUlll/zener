@@ -12,13 +12,13 @@
 
 namespace zener::http {
 
-const char* Conn::staticDir;
+const char *Conn::staticDir;
 std::atomic<int> Conn::userCount;
 bool Conn::isET;
 
 Conn::Conn()
     : _fd(-1), _addr({}), _connId(0), _isClose(true), _iovCnt(0), _iov{} {
-    // TODO 将 _iovCnt 初始化为0 不知道是否合适
+    // TODO: 将 _iovCnt 初始化为0 不知道是否合适
 }
 /*
  *是否因为智能指针、或者因为move，从而导致其提前析构？
@@ -35,7 +35,7 @@ Conn::~Conn() {
     }
 }
 
-Conn::Conn(Conn&& other) noexcept
+Conn::Conn(Conn &&other) noexcept
     : _fd(other._fd), _addr(other._addr), _connId(other._connId),
       _readBuff(std::move(other._readBuff)),
       _writeBuff(std::move(other._writeBuff)),
@@ -53,12 +53,12 @@ Conn::Conn(Conn&& other) noexcept
     other._fd = -1;
     other._connId = 0;
     other._addr = {};
-    // TODO 是否要在此时添加 other 退出的事件？
+    // TODO: 是否要在此时添加 other 退出的事件？
     // 此处设置为 _isClose 可能会让 other 析构的时候不调用 Close
     other._isClose = true;
 }
 
-Conn& Conn::operator=(Conn&& other) noexcept {
+Conn &Conn::operator=(Conn &&other) noexcept {
     if (this != &other) {
         // 释放当前资源
         if (_fd != -1)
@@ -81,7 +81,7 @@ Conn& Conn::operator=(Conn&& other) noexcept {
     return *this;
 }
 
-void Conn::Init(const int sockFd, const sockaddr_in& addr) {
+void Conn::Init(const int sockFd, const sockaddr_in &addr) {
     assert(sockFd > 0);
     userCount.fetch_add(1, std::memory_order_acquire);
     _addr = addr;
@@ -119,7 +119,7 @@ void Conn::Close() {
     }
 }
 
-ssize_t Conn::Read(int* saveErrno) {
+ssize_t Conn::Read(int *saveErrno) {
     ssize_t len = -1;
     ssize_t totalLen = 0;
     constexpr int maxIterations =
@@ -142,7 +142,7 @@ ssize_t Conn::Read(int* saveErrno) {
              *非阻塞读
              *无论是否有数据，函数立即返回。
              *若缓冲区为空，返回错误码（EAGAIN或EWOULDBLOCK）。
-            */
+             */
             if (*saveErrno == EAGAIN || *saveErrno == EWOULDBLOCK) {
                 // 非阻塞模式下，所有数据已读完
                 break;
@@ -155,7 +155,7 @@ ssize_t Conn::Read(int* saveErrno) {
     return totalLen > 0 ? totalLen : len;
 }
 
-ssize_t Conn::Write(int* saveErrno) {
+ssize_t Conn::Write(int *saveErrno) {
 
     ssize_t ret = 0;
     ssize_t totalWritten = 0;
@@ -172,7 +172,7 @@ ssize_t Conn::Write(int* saveErrno) {
              *无论缓冲区状态如何，函数立即返回
              *若缓冲区空间不足或锁定，返回错误码（EAGAIN或EWOULDBLOCK）
              *如果是EAGAIN，在ET模式下应继续尝试
-            */
+             */
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 *saveErrno = errno;
                 return totalWritten;
@@ -190,7 +190,7 @@ ssize_t Conn::Write(int* saveErrno) {
             // 头部数据全部发送完毕，开始发送文件数据
             const size_t fileWritten = ret - _iov[0].iov_len;
             _iov[1].iov_base =
-                static_cast<char*>(_iov[1].iov_base) + fileWritten;
+                static_cast<char *>(_iov[1].iov_base) + fileWritten;
             _iov[1].iov_len -= fileWritten;
             // 头部数据已全部发送，清空对应缓冲区
             _writeBuff.RetrieveAll();
@@ -199,7 +199,7 @@ ssize_t Conn::Write(int* saveErrno) {
         } else {
             // 头部数据未发送完毕
             // 更新头部数据指针和长度
-            _iov[0].iov_base = static_cast<char*>(_iov[0].iov_base) + ret;
+            _iov[0].iov_base = static_cast<char *>(_iov[0].iov_base) + ret;
             _iov[0].iov_len -= ret;
             _writeBuff.Retrieve(ret);
         }
@@ -217,9 +217,7 @@ ssize_t Conn::Write(int* saveErrno) {
     return totalWritten;
 }
 
-// TODO 将返回值重构为 ProcessResult
 Conn::ProcessResult Conn::Process() {
-
     // 1. 如果读缓冲区为空，不进行后续处理
     if (_readBuff.ReadableBytes() <= 0) {
         LOG_D("fd={}: buffer is empty.", _fd);
@@ -239,7 +237,7 @@ Conn::ProcessResult Conn::Process() {
     // 3. 生成HTTP响应
     try {
         _response.MakeResponse(_writeBuff);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         LOG_E("fd={}: make response failed, {}", _fd, e.what());
         return ProcessResult::ERROR;
     }

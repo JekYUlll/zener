@@ -47,7 +47,7 @@ class ThreadPool {
         Shutdown(0); // 强制关闭
     }
 
-    template <typename F> void AddTask(F&& task) {
+    template <typename F> void AddTask(F &&task) {
         {
             std::packaged_task<void()> packagedTask(std::forward<F>(task));
             std::lock_guard<std::mutex> lock(_pool->mtx);
@@ -90,7 +90,7 @@ class ThreadPool {
                 _pool->tasks.pop();
             }
             // 分离线程
-            for (auto& thread : _pool->threads) {
+            for (auto &thread : _pool->threads) {
                 if (thread.joinable()) {
                     thread.detach();
                     LOG_D("ThreadPool: Detached thread {}",
