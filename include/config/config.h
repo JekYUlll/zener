@@ -35,7 +35,7 @@ struct Config {
     const std::string &GetConfigSafe(const std::string &key) const;
 
   private:
-    Config() : configPath(ZENER_CONFIG_FILEPATH) {}
+    Config() {}
 
     static Config _instance;
 

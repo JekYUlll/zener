@@ -2,8 +2,8 @@
 #include "http/file_cache.h"
 #include "utils/log/logger.h"
 
-#include <fcntl.h>
 #include <cstring>
+#include <fcntl.h>
 
 namespace zener::http {
 
@@ -42,19 +42,13 @@ const std::unordered_map<int, std::string> Response::CODE_PATH = {
     {404, "/404.html"},
 };
 
-Response::Response() {
-    _code = -1;
-    _path = "";
-    _staticDir = "";
-    _isKeepAlive = false;
-    _file = nullptr;
-    _fileStat = {};
-    _cachedFilePath = std::string{};
-};
+Response::Response()
+    : _code(-1), _isKeepAlive(false), _path(""), _staticDir(""),
+      _cachedFilePath(""), _file(nullptr), _fileStat({}) {};
 
 Response::~Response() { UnmapFile(); }
 
-void Response::Init(const std::string& staticDir, const std::string& path,
+void Response::Init(const std::string &staticDir, const std::string &path,
                     const bool isKeepAlive, const int code) {
     assert(!staticDir.empty());
     if (_file) {
@@ -69,8 +63,10 @@ void Response::Init(const std::string& staticDir, const std::string& path,
     _cachedFilePath = "";
 }
 
-void Response::MakeResponse(Buffer& buff) {
-    /* 判断请求的资源文件 */
+void Response::MakeResponse(Buffer &buff) {
+    /*
+        判断请求的资源文件
+    */
     if (stat((_staticDir + _path).data(), &_fileStat) < 0 ||
         S_ISDIR(_fileStat.st_mode)) {
         _code = 404;
@@ -85,7 +81,7 @@ void Response::MakeResponse(Buffer& buff) {
     addContent(buff);
 }
 
-char* Response::File() const { return _file; }
+char *Response::File() const { return _file; }
 
 size_t Response::FileLen() const { return _fileStat.st_size; }
 
@@ -96,7 +92,7 @@ void Response::errorHtml() {
     }
 }
 
-void Response::addStateLine(Buffer& buff) {
+void Response::addStateLine(Buffer &buff) {
     std::string status{};
     if (CODE_STATUS.count(_code) == 1) {
         status = CODE_STATUS.find(_code)->second;
@@ -107,7 +103,7 @@ void Response::addStateLine(Buffer& buff) {
     buff.Append("HTTP/1.1 " + std::to_string(_code) + " " + status + "\r\n");
 }
 
-void Response::addHeader(Buffer& buff) const {
+void Response::addHeader(Buffer &buff) const {
     buff.Append("Connection: ");
     if (_isKeepAlive) {
         buff.Append("keep-alive\r\n");
@@ -118,13 +114,11 @@ void Response::addHeader(Buffer& buff) const {
     buff.Append("Content-type: " + getFileType() + "\r\n");
 }
 
-    /// TODO
-    /// 大改
-void Response::addContent(Buffer& buff) {
+/// TODO: Check
+void Response::addContent(Buffer &buff) {
     const std::string fullPath = _staticDir + _path;
     // 打开文件前先记录当前路径，以便后续释放
     _cachedFilePath = fullPath;
-
     LOG_D("File path: {}, size: {}", fullPath, _fileStat.st_size);
 
     if (_fileStat.st_size <= 0) {
@@ -143,16 +137,18 @@ void Response::addContent(Buffer& buff) {
     // 设置文件指针和大小
     _file = cachedFile->data;
 
-    buff.Append("Content-length: " + std::to_string(_fileStat.st_size) + "\r\n\r\n");
+    buff.Append("Content-length: " + std::to_string(_fileStat.st_size) +
+                "\r\n\r\n");
     LOG_D("File successfully mapped to memory: address={:p}, size={}, using "
           "cache: {}",
-          static_cast<void *>(_file), _fileStat.st_size, !_cachedFilePath.empty());
+          static_cast<void *>(_file), _fileStat.st_size,
+          !_cachedFilePath.empty());
 }
 
 void Response::UnmapFile() {
     if (_file) {
         // 记录当前文件信息用于日志
-        void* filePtr = _file;
+        void *filePtr = _file;
         std::string cachedPath = _cachedFilePath;
 
         if (!_cachedFilePath.empty()) {
@@ -161,7 +157,7 @@ void Response::UnmapFile() {
                 LOG_D("Releasing file mapping: file={}, address={:p}",
                       _cachedFilePath, static_cast<void *>(_file));
                 FileCache::GetInstance().ReleaseFileMapping(_cachedFilePath);
-            } catch (const std::exception& e) {
+            } catch (const std::exception &e) {
                 LOG_E("Exception when releasing file mapping: {}, file={}",
                       e.what(), _cachedFilePath);
             }
@@ -188,7 +184,7 @@ std::string Response::getFileType() const {
     return "text/plain";
 }
 
-void Response::ErrorContent(Buffer& buff, const std::string& message) const {
+void Response::ErrorContent(Buffer &buff, const std::string &message) const {
     std::string body;
     std::string status;
     body += "<html><title>Error</title>";

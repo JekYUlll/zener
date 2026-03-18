@@ -6,9 +6,6 @@
 
 namespace zener {
 
-// 原子类型（如
-// std::atomic<T>）的移动构造函数是被删除的，这是为了保证原子操作的线程安全性和语义完整性
-
 Buffer::Buffer(size_t size) : _buffer(size), _readPos(0), _writePos(0) {
     // _prePos(INIT_PREPEND_SIZE)
 }

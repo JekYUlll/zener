@@ -9,6 +9,7 @@ Content-Length: length                                     \r\n (一条请求头
 UserID=string&PWD=string&OrderConfirmation=string                     (请求体)
 */
 #include "buffer/buffer.h"
+#include "serialize/serialize.h"
 
 #include <string>
 #include <unordered_map>
@@ -57,12 +58,6 @@ class Request {
     std::string GetPost(const char* key) const;
 
     [[nodiscard]] bool IsKeepAlive() const;
-
-    /*
-    TODO
-    void HttpConn::ParseFormData() {}
-    void HttpConn::ParseJson() {}
-    */
 
   private:
     bool parseRequestLine(const std::string& line);

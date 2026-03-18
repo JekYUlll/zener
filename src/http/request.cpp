@@ -209,9 +209,6 @@ bool Request::userVerify(const std::string &name, const std::string &pwd,
     LOG_D("{}", order);
 
     if (mysql_query(sql, order)) {
-        /*
-            逻辑疑似错误
-        */
         mysql_free_result(res);
         return false;
     }
@@ -226,12 +223,12 @@ bool Request::userVerify(const std::string &name, const std::string &pwd,
     */
     j = mysql_num_fields(res);
     fields = mysql_fetch_fields(res);
-    if (fields) {
-        for (unsigned int i = 0; i < j; i++) {
-            LOG_I("Field {}: name={}, type={}", i, fields[i].name,
-                  fields[i].type);
-        }
-    }
+    // if (fields) {
+    //     for (unsigned int i = 0; i < j; i++) {
+    //         LOG_I("Field {}: name={}, type={}", i, fields[i].name,
+    //               fields[i].type);
+    //     }
+    // }
 
     while (MYSQL_ROW row = mysql_fetch_row(res)) {
         LOG_D("MYSQL ROW: {0} {1}", row[0], row[1]);

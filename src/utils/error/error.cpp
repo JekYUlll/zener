@@ -3,7 +3,7 @@
 namespace zener {
 namespace error {
 
-const char* GeneralErrorCodeToString(GeneralErrorCode code) {
+const char *GeneralErrorCodeToString(GeneralErrorCode code) {
     switch (code) {
     case GeneralErrorCode::GENERAL_ERROR:
         return "General Error";

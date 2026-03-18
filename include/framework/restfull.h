@@ -11,7 +11,15 @@
 namespace zener {
 namespace fw {
 
-typedef std::function<bool(http::Request, http::Response)> HandlerFunc;
+  // enum class StatusCode {
+//     HTTP_OK = 200,
+//     HTTP_CREATED = 201,
+//     HTTP_BAD_REQUEST = 400,
+//     HTTP_NOT_FOUND = 404,
+//     HTTP_INTERNAL_SERVER_ERROR = 500,
+// };
+
+typedef std::function<bool(const http::Request&, http::Response&)> HandlerFunc;
 
 class RestFull {
   public:

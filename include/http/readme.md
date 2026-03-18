@@ -1,13 +1,9 @@
-在C++中实现类似Go语言的`context`机制是完全可行的，但需要结合C++的特性进行面向对象设计和RAII（资源获取即初始化）优化。以下是完整的实现方案：
-
 ---
-
 ### **Context 核心设计目标**
 1. 请求级生命周期管理
 2. 跨中间件/路由的数据传递
 3. 超时/取消控制传播
 4. 支持中间件链式操作
-
 ---
 
 ### **基础实现代码（现代C++风格）**
@@ -23,16 +19,16 @@
 class Context {
 public:
     // 构造函数（绑定请求/响应）
-    Context(Request& req, Response& res) 
-        : req_(req), res_(res), 
+    Context(Request& req, Response& res)
+        : req_(req), res_(res),
           deadline_(std::chrono::steady_clock::time_point::max()),
           cancelled_(false) {}
 
     //--------- 核心接口 ---------//
-    
+
     // 设置截止时间（相对时间）
     void SetTimeout(int milliseconds) {
-        deadline_ = std::chrono::steady_clock::now() + 
+        deadline_ = std::chrono::steady_clock::now() +
                    std::chrono::milliseconds(milliseconds);
         timeout_future_ = std::async(std::launch::async, [this] {
             std::this_thread::sleep_until(deadline_);
@@ -51,7 +47,7 @@ public:
 
     // 状态查询
     bool IsDone() const {
-        return cancelled_.load(std::memory_order_acquire) || 
+        return cancelled_.load(std::memory_order_acquire) ||
                (std::chrono::steady_clock::now() >= deadline_);
     }
 
@@ -91,6 +87,7 @@ private:
 ### **关键特性实现解析**
 
 #### **1. 超时控制机制**
+
 ```cpp
 // 设置超时（在中间件中使用）
 ctx.SetTimeout(5000); // 5秒超时
@@ -102,6 +99,7 @@ if (ctx.IsDone()) {
 ```
 
 #### **2. 中间件链式调用**
+
 ```cpp
 // 中间件示例：身份验证
 server.Use([](Context& ctx) {
@@ -116,6 +114,7 @@ server.Use([](Context& ctx) {
 ```
 
 #### **3. 数据传递（类型安全）**
+
 ```cpp
 // 在中间件中存储数据
 ctx.Set<std::string>("request_id", GenerateUUID());
@@ -132,7 +131,7 @@ auto& user = ctx.Get<User>("user");
 // 路由处理示例
 server.GET("/api/profile", [](Context& ctx) {
     if (ctx.IsDone()) return; // 快速失败
-    
+
     try {
         auto& user = ctx.Get<User>("user");
         ctx.GetResponse().Json(user.ToJson());
@@ -152,18 +151,21 @@ server.SetContextFactory([](Request& req, Response& res) {
 ### **性能优化技巧**
 
 1. **零拷贝设计**：
+
    ```cpp
    // 使用string_view传递头信息
    void SetHeader(std::string_view key, std::string_view value);
    ```
 
 2. **内存池优化**：
+
    ```cpp
    // 预分配Context对象池
    ObjectPool<Context> context_pool(1000);
    ```
 
 3. **原子操作优化**：
+
    ```cpp
    // 使用memory_order_relaxed提升性能
    cancelled_.store(true, std::memory_order_relaxed);
@@ -185,13 +187,13 @@ server.SetContextFactory([](Request& req, Response& res) {
 
 ### **与Go context的主要差异对比**
 
-| 特性               | Go context                  | C++ Context实现             |
-|--------------------|----------------------------|----------------------------|
-| 取消传播           | 通过Done() channel         | 原子标志+回调机制           |
-| 数据存储           | `context.WithValue`        | 类型安全的模板方法          |
-| 超时控制           | `context.WithTimeout`      | 基于steady_clock的精确控制  |
-| 错误处理           | 显式error返回              | 异常+RAII自动清理           |
-| 协程支持           | 原生协程环境               | 可集成C++20 Coroutines      |
+| 特性     | Go context            | C++ Context实现            |
+| -------- | --------------------- | -------------------------- |
+| 取消传播 | 通过Done() channel    | 原子标志+回调机制          |
+| 数据存储 | `context.WithValue`   | 类型安全的模板方法         |
+| 超时控制 | `context.WithTimeout` | 基于steady_clock的精确控制 |
+| 错误处理 | 显式error返回         | 异常+RAII自动清理          |
+| 协程支持 | 原生协程环境          | 可集成C++20 Coroutines     |
 
 ---
 
@@ -210,19 +212,19 @@ server.Use(LoggingMiddleware)     // 日志记录
 // 在业务处理中利用Context
 void FileUploadHandler(Context& ctx) {
     auto& req = ctx.GetRequest();
-    
+
     // 检查取消信号
     if (ctx.IsDone()) {
         throw RequestCancelledException();
     }
-    
+
     // 获取中间件传递的数据
     auto& user = ctx.Get<User>("user");
-    
+
     // 处理上传文件
     auto files = req.ParseMultipartForm();
     SaveToDatabase(user.id, files);
-    
+
     ctx.GetResponse().Send("Upload succeeded");
 }
 ```
@@ -230,6 +232,7 @@ void FileUploadHandler(Context& ctx) {
 ---
 
 这样的设计既保留了Go context的核心思想，又充分利用了C++的以下优势：
+
 - 强类型系统保证数据安全
 - RAII自动资源管理
 - 高性能原子操作
@@ -237,6 +240,7 @@ void FileUploadHandler(Context& ctx) {
 - 与现代异步框架的兼容性
 
 可以根据项目需求进一步扩展支持：
+
 - 分布式追踪ID自动传播
 - 请求级内存使用监控
 - 熔断器模式集成

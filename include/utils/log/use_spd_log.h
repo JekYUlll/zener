@@ -1,9 +1,16 @@
 #ifndef ZENER_SPD_LOGGER_H
 #define ZENER_SPD_LOGGER_H
 
+// #define FMT_UNSAFE_ARITHMETIC_FORMATTING
+
 #include "spdlog/common.h"
+#include "spdlog/fmt/bundled/core.h"
+#include "spdlog/fmt/bundled/format.h"
+
 #include <atomic>
 #include <string>
+
+#include <fmt/format.h>
 
 namespace zener {
 
@@ -16,12 +23,12 @@ namespace zener {
 
 class Logger {
   public:
-    static Logger* GetLoggerInstance() { return &_instance; }
+    static Logger *GetLoggerInstance() { return &_instance; }
 
-    Logger(const Logger&) = delete;
-    Logger(Logger&&) = delete;
-    Logger& operator=(const Logger&) = delete;
-    Logger& operator=(Logger&&) = delete;
+    Logger(const Logger &) = delete;
+    Logger(Logger &&) = delete;
+    Logger &operator=(const Logger &) = delete;
+    Logger &operator=(Logger &&) = delete;
     ~Logger();
 
     static void Init();
@@ -43,10 +50,11 @@ class Logger {
 
     template <typename... Args>
     void Log(const spdlog::source_loc loc, const spdlog::level::level_enum lvl,
-             spdlog::format_string_t<Args...> fmt, Args&&... args) {
+             std::string_view fmt, Args &&...args) {
         spdlog::memory_buf_t buf;
-        fmt::vformat_to(fmt::appender(buf), fmt,
+        fmt::vformat_to(std::back_inserter(buf), fmt,
                         fmt::make_format_args(args...));
+
         log(loc, lvl, &buf);
     }
 
@@ -57,12 +65,12 @@ class Logger {
   private:
     Logger() = default;
 
-    static void log(const spdlog::source_loc& loc,
+    static void log(const spdlog::source_loc &loc,
                     spdlog::level::level_enum lvl,
-                    const spdlog::memory_buf_t* buffer);
+                    const spdlog::memory_buf_t *buffer);
 
     // 根据当前日期生成日志文件名
-    static std::string generateLogFileName(const std::string& prefix);
+    static std::string generateLogFileName(const std::string &prefix);
 
     static Logger _instance;
     static std::string _logFileName;  // 当前日志文件的完整路径
@@ -72,9 +80,9 @@ class Logger {
     static bool _usingRotation; // 是否使用日志轮转
 };
 
-#define ZENER_LOG_LOGGER_CALL(adlog, level, ...)                               \
-    (adlog)->Log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},      \
-                 level, __VA_ARGS__)
+#define ZENER_LOG_LOGGER_CALL(zener_log, level, ...)                           \
+    (zener_log)->Log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},  \
+                     level, __VA_ARGS__)
 
 } // namespace zener
 
