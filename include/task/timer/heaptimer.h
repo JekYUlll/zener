@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <functional>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -69,7 +70,10 @@ class TimerManager final : public ITimerManager {
     ~TimerManager() override = default;
 
     // 更新定时器，处理到期任务
-    void Update() override { _timer.Tick(); }
+    void Update() override {
+        std::lock_guard<std::mutex> lk(_mtx);
+        _timer.Tick();
+    }
 
     // 在单独线程中循环处理定时器
     void Tick() override {
@@ -82,62 +86,26 @@ class TimerManager final : public ITimerManager {
     void Stop() override { _bClosed = true; }
 
     // 获取下一个定时事件的超时时间
-    int GetNextTick() override { return _timer.GetNextTick(); }
+    int GetNextTick() override {
+        std::lock_guard<std::mutex> lk(_mtx);
+        return _timer.GetNextTick();
+    }
 
     // 基于业务ID取消定时器
     void CancelByKey(const int key) {
-        if (const auto it = _keyToTimerId.find(key);
-            it != _keyToTimerId.end()) {
-            const int timerId = it->second;
-            LOG_D("定时器：通过业务key={}取消定时器id={}", key, timerId);
-
-            try {
-                // 直接访问HeapTimer的私有成员
-                if (_timer._ref.count(timerId) > 0) {
-                    if (const size_t index = _timer._ref[timerId];
-                        index < _timer._heap.size()) {
-                        LOG_D("定时器：删除节点index={}", index);
-                        _timer.del(index);
-                    } else {
-                        LOG_W("定时器：索引越界，无法删除节点 index={}, "
-                              "堆大小={}",
-                              index, _timer._heap.size());
-                    }
-                } else {
-                    LOG_W("定时器：找不到定时器ID={}", timerId);
-                }
-
-                // 从重复记录中删除
-                _repeats.erase(timerId);
-
-                // 从映射中删除
-                _keyToTimerId.erase(it);
-            } catch (const std::exception& e) {
-                LOG_E("定时器：取消定时器异常 key={}, id={}, 错误={}", key,
-                      timerId, e.what());
-                // 尝试清理资源
-                _repeats.erase(timerId);
-                _keyToTimerId.erase(key);
-            } catch (...) {
-                LOG_E("定时器：取消定时器未知异常 key={}, id={}", key, timerId);
-                // 尝试清理资源
-                _repeats.erase(timerId);
-                _keyToTimerId.erase(key);
-            }
-        } else {
-            LOG_D("定时器：无效的业务key={}", key);
-        }
+        std::lock_guard<std::mutex> lk(_mtx);
+        CancelByKeyLocked(key);
     }
 
     // 使用业务ID调度定时器，如客户端fd
     template <typename F, typename... Args>
     void ScheduleWithKey(int key, int milliseconds, int repeat, F&& f,
                          Args&&... args) {
-        // 先取消该key关联的旧定时器
-        CancelByKey(key);
+        std::lock_guard<std::mutex> lk(_mtx);
+        CancelByKeyLocked(key);
         auto callback = [this, key, func = std::forward<F>(f),
                          tup = std::make_tuple(std::forward<Args>(args)...)]() {
-            // 执行回调前先检查key是否仍然有效
+            // Called from within Update() which already holds _mtx
             if (_keyToTimerId.find(key) != _keyToTimerId.end()) {
                 std::apply(func, tup);
             }
@@ -157,12 +125,32 @@ class TimerManager final : public ITimerManager {
   private:
     TimerManager() : _bClosed(false), _nextId(0) {}
 
+    // Must be called with _mtx held
+    void CancelByKeyLocked(const int key) {
+        const auto it = _keyToTimerId.find(key);
+        if (it == _keyToTimerId.end()) return;
+        const int timerId = it->second;
+        try {
+            if (_timer._ref.count(timerId) > 0) {
+                const size_t index = _timer._ref[timerId];
+                if (index < _timer._heap.size()) {
+                    _timer.del(index);
+                }
+            }
+            _repeats.erase(timerId);
+            _keyToTimerId.erase(it);
+        } catch (...) {
+            _repeats.erase(timerId);
+            _keyToTimerId.erase(key);
+        }
+    }
+
+    mutable std::mutex _mtx;
     Timer _timer;
     bool _bClosed;
-    int _nextId; // 为每个计时器生成唯一ID
-    std::unordered_map<int, std::pair<int, int>>
-        _repeats;                               // ID -> (repeat count, period)
-    std::unordered_map<int, int> _keyToTimerId; // 业务ID -> 定时器ID的映射
+    int _nextId;
+    std::unordered_map<int, std::pair<int, int>> _repeats;
+    std::unordered_map<int, int> _keyToTimerId;
 };
 
 } // namespace v0

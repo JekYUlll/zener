@@ -12,6 +12,7 @@
 #include "common.h"
 #include "http/request.h"
 #include "http/response.h"
+#include "http/router.h"
 
 #include <arpa/inet.h> // sockaddr_in
 #include <cstdint>     // uint64_t
@@ -77,8 +78,8 @@ class Conn {
 
     static bool isET;             // 是否为边缘触发
     static const char *staticDir; // 请求文件对应的根目录
-    static std::atomic<int>
-        userCount; // TODO 感觉这玩意应该放在 Server 里，就不需要用原子了
+    static std::atomic<int> userCount;
+    static const Router* router;  // optional; set by Server to enable routing
 
   private:
     int _fd;

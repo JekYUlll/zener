@@ -26,6 +26,19 @@ class Response {
     [[nodiscard]] size_t FileLen() const;
     _ZENER_SHORT_FUNC int Code() const { return _code; }
 
+    // ---- Fluent handler API ----
+    // Mark this response as handled by a route handler (skips static file logic)
+    _ZENER_SHORT_FUNC bool IsHandled() const { return _handled; }
+
+    // Set status code, returns *this for chaining
+    Response& Status(int code) { _code = code; return *this; }
+
+    // Write plain-text body and finalize
+    void Send(Buffer& buff, const std::string& body);
+
+    // Write JSON body and finalize
+    void Json(Buffer& buff, const std::string& json);
+
   private:
     void addStateLine(Buffer& buff);
     void addHeader(Buffer& buff) const;
@@ -37,6 +50,7 @@ class Response {
 
     int _code;
     bool _isKeepAlive;
+    bool _handled{false}; // set to true when a route handler writes the response
 
     std::string _path;
     std::string _staticDir;

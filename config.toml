@@ -5,15 +5,15 @@ timeout = 60000
 optlinger = false
 
 [log]
-level = "DEBUG"
+level = "RELEASE"
 dir = "logs"
 
 [mysql]
 host = "127.0.0.1"
 port = 3306
-user = "root"
+user = "zener"
 password = "donotpanic"
-database = "zener_test"
+database = "zener"
 poolSize = 8           # 数据库连接池的容量
 
 # [redis]

@@ -10,6 +10,7 @@
 */
 #include "core/epoller.h"
 #include "http/conn.h"
+#include "http/router.h"
 #include "task/threadpool_1.h"
 
 #include <atomic>
@@ -36,6 +37,24 @@ class Server {
 
     void Run();
     void Stop();
+
+    // ---- Routing API ----
+    void GET(const std::string& path, http::HandlerFunc handler) {
+        _router.Add("GET", path, std::move(handler));
+    }
+    void POST(const std::string& path, http::HandlerFunc handler) {
+        _router.Add("POST", path, std::move(handler));
+    }
+    void PUT(const std::string& path, http::HandlerFunc handler) {
+        _router.Add("PUT", path, std::move(handler));
+    }
+    void DELETE(const std::string& path, http::HandlerFunc handler) {
+        _router.Add("DELETE", path, std::move(handler));
+    }
+    // Serve files from fsRoot under urlPrefix, e.g. Static("/", "./static")
+    void Static(const std::string& urlPrefix, const std::string& fsRoot) {
+        _router.Static(urlPrefix, fsRoot);
+    }
 
     _ZENER_SHORT_FUNC bool IsClosed() const {
         return _isClose.load(std::memory_order_relaxed);
@@ -147,6 +166,7 @@ class Server {
     // webserver 11 此处存储 unique_ptr<HeapTimer>, 但我计时器是单例
     std::unique_ptr<ThreadPool> _threadpool;
     std::unique_ptr<Epoller> _epoller;
+    http::Router _router;
     /*
         旧版本: mutable std::unordered_map<int, http::Conn> _users;
         新版本: 使用ConnInfo结构体存储连接信息

@@ -59,6 +59,9 @@ class Request {
 
     [[nodiscard]] bool IsKeepAlive() const;
 
+    static bool UserVerify(const std::string& name, const std::string& pwd,
+                           bool isLogin);
+
   private:
     bool parseRequestLine(const std::string& line);
     void parseHeader(const std::string& line);
@@ -67,9 +70,6 @@ class Request {
     void parsePath();
     void parsePost();
     void parseFromUrlencoded();
-
-    static bool userVerify(const std::string& name, const std::string& pwd,
-                           bool isLogin);
 
     PARSE_STATE _state;
     std::string _method, _path, _version, _body;

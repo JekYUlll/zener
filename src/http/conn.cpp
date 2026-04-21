@@ -1,4 +1,6 @@
 #include "http/conn.h"
+#include "http/context.h"
+#include "http/router.h"
 #include "utils/log/logger.h"
 
 #include <atomic>
@@ -15,6 +17,7 @@ namespace zener::http {
 const char *Conn::staticDir;
 std::atomic<int> Conn::userCount;
 bool Conn::isET;
+const Router* Conn::router{nullptr};
 
 Conn::Conn()
     : _fd(-1), _addr({}), _connId(0), _isClose(true), _iovCnt(0), _iov{} {
@@ -226,41 +229,77 @@ Conn::ProcessResult Conn::Process() {
     _request.Init();
     // 2. 解析HTTP请求
     const bool parseSuccess = _request.parse(_readBuff);
-    _response.UnmapFile(); // 清除之前可能存在的文件映射
-    if (parseSuccess) {
-        _response.Init(staticDir, _request.Path(), _request.IsKeepAlive(), 200);
-    } else {
-        LOG_W("fd={}: parse failed, request Path:{}", _fd,
-              _request.Path().c_str());
-        _response.Init(staticDir, _request.Path(), false, 400);
+    _response.UnmapFile();
+
+    if (!parseSuccess) {
+        LOG_W("fd={}: parse failed, request Path:{}", _fd, _request.Path().c_str());
+        _writeBuff.Append("HTTP/1.1 400 Bad Request\r\nContent-length: 0\r\n\r\n");
+        if (_writeBuff.ReadableBytes() == 0) return ProcessResult::ERROR;
+        _iovCnt = 1;
+        _iov[0].iov_base = _writeBuff.Peek();
+        _iov[0].iov_len  = _writeBuff.ReadableBytes();
+        return ProcessResult::OK;
     }
-    // 3. 生成HTTP响应
+
+    // 3. 路由分发
+    if (router) {
+        Context ctx(_request, _response, _writeBuff);
+        const auto result = router->Dispatch(ctx);
+
+        if (result.kind == DispatchResult::Kind::Handler) {
+            if (_writeBuff.ReadableBytes() == 0) {
+                LOG_W("fd={}: route handler produced empty response.", _fd);
+                return ProcessResult::ERROR;
+            }
+            _iovCnt = 1;
+            _iov[0].iov_base = _writeBuff.Peek();
+            _iov[0].iov_len  = _writeBuff.ReadableBytes();
+            return ProcessResult::OK;
+        }
+
+        if (result.kind == DispatchResult::Kind::StaticFile) {
+            _response.Init(result.fsRoot, result.relativePath,
+                           _request.IsKeepAlive(), 200);
+        } else {
+            // None: no route and no static mount matched → plain 404
+            _writeBuff.Append("HTTP/1.1 404 Not Found\r\nContent-length: 0\r\n\r\n");
+            _iovCnt = 1;
+            _iov[0].iov_base = _writeBuff.Peek();
+            _iov[0].iov_len  = _writeBuff.ReadableBytes();
+            return ProcessResult::OK;
+        }
+    } else {
+        // no router at all — should not happen in normal operation
+        LOG_W("fd={}: no router configured.", _fd);
+        _writeBuff.Append("HTTP/1.1 500 Internal Server Error\r\nContent-length: 0\r\n\r\n");
+        _iovCnt = 1;
+        _iov[0].iov_base = _writeBuff.Peek();
+        _iov[0].iov_len  = _writeBuff.ReadableBytes();
+        return ProcessResult::OK;
+    }
+
+    // 4. 生成HTTP响应
     try {
         _response.MakeResponse(_writeBuff);
     } catch (const std::exception &e) {
         LOG_E("fd={}: make response failed, {}", _fd, e.what());
         return ProcessResult::ERROR;
     }
-    // 4. 如果写缓冲区为空，可能是错误情况，返回false
+
     if (_writeBuff.ReadableBytes() == 0) {
         LOG_W("fd={}: buffer is empty.", _fd);
         return ProcessResult::ERROR;
     }
-    // 5. 设置iov结构（响应头+文件）
     _iovCnt = 0;
-    if (_writeBuff.ReadableBytes() > 0) {
-        _iov[0].iov_base = _writeBuff.Peek();
-        _iov[0].iov_len = _writeBuff.ReadableBytes();
-        _iovCnt = 1;
-    }
-    // 6. 设置文件响应（如果有）
+    _iov[0].iov_base = _writeBuff.Peek();
+    _iov[0].iov_len  = _writeBuff.ReadableBytes();
+    _iovCnt = 1;
     if (_response.File() && _response.FileLen() > 0) {
         _iov[1].iov_base = _response.File();
-        _iov[1].iov_len = _response.FileLen();
+        _iov[1].iov_len  = _response.FileLen();
         _iovCnt = 2;
     }
-    LOG_D("filesize:{}, {} to {}.", _response.FileLen(), _iovCnt,
-          ToWriteBytes());
+    LOG_D("filesize:{}, {} to {}.", _response.FileLen(), _iovCnt, ToWriteBytes());
     return ProcessResult::OK;
 }
 

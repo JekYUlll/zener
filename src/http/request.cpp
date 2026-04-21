@@ -127,18 +127,6 @@ void Request::parsePost() {
     if (_method == "POST" &&
         _header["Content-Type"] == "application/x-www-form-urlencoded") {
         parseFromUrlencoded();
-        if (DEFAULT_HTML_TAG.count(_path)) {
-            int tag = DEFAULT_HTML_TAG.find(_path)->second;
-            LOG_D("Tag:{}", tag);
-            if (tag == 0 || tag == 1) {
-                if (const bool isLogin = (tag == 1);
-                    userVerify(_post["username"], _post["password"], isLogin)) {
-                    _path = "/welcome.html";
-                } else {
-                    _path = "/error.html";
-                }
-            }
-        }
     }
 }
 
@@ -183,7 +171,7 @@ void Request::parseFromUrlencoded() {
     }
 }
 
-bool Request::userVerify(const std::string &name, const std::string &pwd,
+bool Request::UserVerify(const std::string &name, const std::string &pwd,
                          const bool isLogin) {
     if (name.empty() || pwd.empty()) {
         return false;
@@ -264,6 +252,19 @@ bool Request::userVerify(const std::string &name, const std::string &pwd,
     // db::SqlConnector::GetInstance().FreeConn(sql); // RAII 处理
     LOG_D("User {} verify success!", name);
     return flag;
+}
+
+std::string Request::Method() const { return _method; }
+
+std::string Request::Version() const { return _version; }
+
+std::string Request::GetPost(const std::string& key) const {
+    auto it = _post.find(key);
+    return it != _post.end() ? it->second : "";
+}
+
+std::string Request::GetPost(const char* key) const {
+    return GetPost(std::string(key));
 }
 
 } // namespace zener::http

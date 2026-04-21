@@ -45,7 +45,9 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     _cwd = std::string(cwdBuff);
     _staticDir = _cwd + "/static";
     http::Conn::userCount.store(0);
-    http::Conn::staticDir = _staticDir.c_str();
+    http::Conn::router = &_router;
+    // Register default static file mount — equivalent to gin's Static("/", "./static")
+    _router.Static("/", _staticDir);
 
     initEventMode(trigMode); // TODO 在Epoller里已经设置一遍了
 
@@ -76,7 +78,7 @@ Server::Server(int port, const int trigMode, const int timeoutMS,
     LOG_I("|  Listen Mode: {}, OpenConn Mode: {}",
           (_listenEvent & EPOLLET ? "ET" : "LT"),
           (_connEvent & EPOLLET ? "ET" : "LT"));
-    LOG_I("|  static path: {}", http::Conn::staticDir);
+    LOG_I("|  static path: {}", _staticDir);
     LOG_I("| 󰰙 SqlConnPool num: {}, ThreadPool num: {}", connPoolNum,
           threadNum);
     LOG_I("| 󰔛 TimerManager: {}", TIMER_MANAGER_TYPE);
@@ -240,24 +242,14 @@ void Server::closeConn(http::Conn *client) {
         writeLocker.unlock();
         return;
     }
-    if constexpr (false) {
-        /*
-         * TODO: 删除定时器里预订的超时关闭操作，因为此函数会在此刻提前删除？
-         * 实际上似乎脱裤子放屁，因为定时器里注册的本来就是此函数
-         * 注册之后在本函数里又给 Cancel
-         * 掉了，导致计时器一直是空的？所以连接占满，超时关闭失效？
-         */
-        if (_timeoutMS > 0) {
-            try {
-                TimerManagerImpl::GetInstance().CancelByKey(connId);
-            } catch (const std::exception &e) {
-                LOG_E("Exception canceling fd {} from timer: connId {}: {}", fd,
-                      connId, e.what());
-            } catch (...) {
-                LOG_E(
-                    "Unknown Exception canceling fd {} from timer: connId {}!",
-                    fd, connId);
-            }
+    // Cancel the timeout timer when closing the connection (key = fd)
+    if (_timeoutMS > 0) {
+        try {
+            TimerManagerImpl::GetInstance().CancelByKey(fd);
+        } catch (const std::exception &e) {
+            LOG_E("Exception canceling timer for fd {}: {}", fd, e.what());
+        } catch (...) {
+            LOG_E("Unknown exception canceling timer for fd {}", fd);
         }
     }
     if (!_epoller->DelFd(fd)) {
@@ -322,8 +314,7 @@ void Server::_closeConnInternal(http::Conn &&client) const {
     LOG_T("Closing fd {} (connId={}) asynchronously.", fd, connId);
     if (_timeoutMS > 0) {
         try { // 取消计时器里注册的超时关闭任务，因为此时就要关闭了
-            // TODO 严重bug：此处是否又把自己取消了？
-            TimerManagerImpl::GetInstance().CancelByKey(connId);
+            TimerManagerImpl::GetInstance().CancelByKey(fd);
         } catch (const std::exception &e) {
             LOG_E("Timer cancel error: {}", e.what());
         }
@@ -645,7 +636,7 @@ void Server::extentTime(http::Conn *client) {
                 conn = _users[fd].conn.get();
             }
             if (conn) {
-                if (conn->IsClosed()) {
+                if (!conn->IsClosed()) {
                     this->closeConn(conn);
                 }
             }

@@ -50,7 +50,6 @@ Response::~Response() { UnmapFile(); }
 
 void Response::Init(const std::string &staticDir, const std::string &path,
                     const bool isKeepAlive, const int code) {
-    assert(!staticDir.empty());
     if (_file) {
         UnmapFile();
     }
@@ -61,6 +60,7 @@ void Response::Init(const std::string &staticDir, const std::string &path,
     _file = nullptr;
     _fileStat = {0};
     _cachedFilePath = "";
+    _handled = false;
 }
 
 void Response::MakeResponse(Buffer &buff) {
@@ -182,6 +182,36 @@ std::string Response::getFileType() const {
         return SUFFIX_TYPE.find(suffix)->second;
     }
     return "text/plain";
+}
+
+void Response::Send(Buffer &buff, const std::string &body) {
+    _handled = true;
+    addStateLine(buff);
+    buff.Append("Connection: ");
+    if (_isKeepAlive) {
+        buff.Append("keep-alive\r\n");
+        buff.Append("keep-alive: max=6, timeout=120\r\n");
+    } else {
+        buff.Append("close\r\n");
+    }
+    buff.Append("Content-type: text/plain\r\n");
+    buff.Append("Content-length: " + std::to_string(body.size()) + "\r\n\r\n");
+    buff.Append(body);
+}
+
+void Response::Json(Buffer &buff, const std::string &json) {
+    _handled = true;
+    addStateLine(buff);
+    buff.Append("Connection: ");
+    if (_isKeepAlive) {
+        buff.Append("keep-alive\r\n");
+        buff.Append("keep-alive: max=6, timeout=120\r\n");
+    } else {
+        buff.Append("close\r\n");
+    }
+    buff.Append("Content-type: application/json\r\n");
+    buff.Append("Content-length: " + std::to_string(json.size()) + "\r\n\r\n");
+    buff.Append(json);
 }
 
 void Response::ErrorContent(Buffer &buff, const std::string &message) const {
